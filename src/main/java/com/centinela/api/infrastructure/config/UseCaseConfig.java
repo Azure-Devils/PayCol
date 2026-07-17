@@ -1,8 +1,10 @@
 package com.centinela.api.infrastructure.config;
 
+import com.centinela.api.domain.port.inbound.GetTransactionUseCase;
 import com.centinela.api.domain.port.inbound.IngestTransactionUseCase;
 import com.centinela.api.domain.port.outbound.MessageQueuePort;
 import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
+import com.centinela.api.domain.service.GetTransactionService;
 import com.centinela.api.domain.service.IngestTransactionService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,5 +22,10 @@ public class UseCaseConfig {
     public IngestTransactionUseCase ingestTransactionUseCase(TransactionRepositoryPort transactionRepositoryPort,
                                                                MessageQueuePort messageQueuePort) {
         return new IngestTransactionService(transactionRepositoryPort, messageQueuePort);
+    }
+
+    @Bean
+    public GetTransactionUseCase getTransactionUseCase(TransactionRepositoryPort transactionRepositoryPort) {
+        return new GetTransactionService(transactionRepositoryPort);
     }
 }
