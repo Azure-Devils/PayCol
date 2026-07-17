@@ -1,5 +1,9 @@
 target/
 *.class
+
+# Documentos de especificación/rúbrica: se mantienen locales, fuera del repo
+especificaciones.md
+Azure-Semana1.md
 .mvn/
 !.mvn/wrapper/maven-wrapper.jar
 .idea/
