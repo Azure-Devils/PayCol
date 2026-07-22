@@ -13,3 +13,6 @@ Azure-Semana1.md
 *.iml
 .vscode/
 *.log
+
+# Truststore/cert local para el emulador de Cosmos DB (no versionar)
+.local/
