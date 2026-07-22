@@ -107,6 +107,32 @@ solo aparecen al escribir el código real:
 - Verificado con `mvn clean compile`: build exitoso, sin necesidad de una cuenta Cosmos real
   (no se ejecutó la aplicación contra un endpoint vivo en esta sesión).
 
-**Pendiente:** el equipo de DevOps/Infra todavía debe confirmar el SKU/RU exacto y crear la cuenta real
-(este documento no autoriza aprovisionamiento, solo el código); una vez creada, completar
-`AZURE_COSMOS_ENDPOINT`/`AZURE_COSMOS_KEY` (o Managed Identity) y correr la app contra Cosmos real.
+**Pendiente (actualizado 2026-07-22 por el equipo de DevOps/Infra):** el SKU/RU ya está confirmado y el
+Bicep está listo en `infra/` (`infra/main.bicep`, `infra/cosmos-db.bicep`,
+`infra/budget-alert.bicep`, `infra/main.parameters.json`, con guía completa en
+`infra/README.md`): cuenta Cosmos DB API NoSQL/Core con free tier habilitado, una sola región,
+consistencia Session, base de datos `centinela` con throughput manual compartido en 1000 RU/s
+(nunca autoscale), containers `transactions` y `customers` con partition key `/customerId`
+(verificados contra `CosmosTransactionDocument.java`/`CosmosCustomerDocument.java`), y un Azure
+Budget de ~1 USD/mes con alertas al 80%/100% en el mismo deployment.
+
+Este Bicep **todavía no se ha ejecutado contra Azure real**. Falta, en este orden:
+
+1. Instalar `az` CLI en la máquina (no está instalado hoy) y correr `az login`.
+2. Confirmar con el usuario la suscripción/tenant correctos (`az account show`) — no asumir
+   si hay más de una suscripción disponible (p. ej. si más adelante se activa Azure for
+   Students / GitHub Student Pack, sería una suscripción o crédito distinto al trial actual).
+3. Verificar que no exista ya otra cuenta Cosmos con free tier activo en la suscripción
+   (`az cosmosdb list --query "[].{name:name, freeTier:enableFreeTier}"`), dado que el free
+   tier es único por suscripción.
+4. Confirmar/crear el resource group destino.
+5. **Aprobación explícita del usuario** para correr
+   `az deployment group create --resource-group <rg> --template-file infra/main.bicep
+   --parameters infra/main.parameters.json` — sin esa aprobación, el equipo de DevOps/Infra no ejecuta
+   el deployment aunque el recurso sea gratuito (free tier).
+
+Una vez creada la cuenta real, completar `AZURE_COSMOS_ENDPOINT`/`AZURE_COSMOS_KEY` (como
+secretos, nunca en el repo) y correr la app contra Cosmos real. Queda además pendiente, como
+mejora posterior (no bloqueante), migrar la autenticación de Cosmos de clave estática a
+Managed Identity (`DefaultAzureCredential`), igual que ya se hace con Azure Queue/Blob en este
+proyecto — a coordinar con el equipo de backend.
