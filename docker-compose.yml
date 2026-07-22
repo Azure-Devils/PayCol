@@ -16,5 +16,21 @@ services:
       timeout: 5s
       retries: 10
 
+  # Emulador local de Azure Cosmos DB (API NoSQL). Corre 100% en esta máquina, sin tocar
+  # Azure ni generar ningún costo — equivalente al contenedor de postgres de arriba, pero
+  # para Cosmos. Ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md.
+  # La key de abajo NO es un secreto: es la clave fija de desarrollo que Microsoft publica
+  # para este emulador (siempre la misma, igual para todo el mundo, solo válida en local).
+  cosmosdb-emulator:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    container_name: centinela-cosmosdb-emulator
+    environment:
+      AZURE_COSMOS_EMULATOR_PARTITION_COUNT: "3"
+      AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "false"
+    ports:
+      # 8085 en el host (el 8081 ya lo usa server.port de la propia app Spring Boot).
+      - "8085:8081"
+      - "10250-10255:10250-10255"
+
 volumes:
   centinela_postgres_data:

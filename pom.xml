@@ -20,6 +20,9 @@
     <properties>
         <java.version>21</java.version>
         <azure-sdk-bom.version>1.2.28</azure-sdk-bom.version>
+        <!-- BOM que fija versiones compatibles de todos los starters "spring-cloud-azure-*",
+             incluido el de Cosmos DB. Ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md -->
+        <spring-cloud-azure.version>5.20.1</spring-cloud-azure.version>
     </properties>
 
     <dependencyManagement>
@@ -28,6 +31,13 @@
                 <groupId>com.azure</groupId>
                 <artifactId>azure-sdk-bom</artifactId>
                 <version>${azure-sdk-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.azure.spring</groupId>
+                <artifactId>spring-cloud-azure-dependencies</artifactId>
+                <version>${spring-cloud-azure.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -43,6 +53,10 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
+        <!-- spring-boot-starter-data-jpa, postgresql, flyway-*: se conservan para que el
+             código de PostgresTransactionRepositoryAdapter (aislado detrás del perfil
+             "postgres-legacy") siga compilando. No se usan por defecto desde la migración
+             a Cosmos DB — ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -70,6 +84,16 @@
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-storage-queue</artifactId>
+        </dependency>
+
+        <!-- Motor de persistencia actual (Semana 1, post-migración): Azure Cosmos DB,
+             API NoSQL/Core. Spring Data Cosmos nos da CosmosRepository (equivalente a
+             JpaRepository, pero para documentos en vez de filas) y el soporte de
+             autenticación vía Managed Identity/DefaultAzureCredential que exige el
+             proyecto (nunca connection strings ni keys hardcodeadas). -->
+        <dependency>
+            <groupId>com.azure.spring</groupId>
+            <artifactId>spring-cloud-azure-starter-data-cosmos</artifactId>
         </dependency>
 
         <dependency>

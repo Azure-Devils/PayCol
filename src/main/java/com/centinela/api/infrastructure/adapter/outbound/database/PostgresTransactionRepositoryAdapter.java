@@ -4,6 +4,7 @@ import com.centinela.api.domain.model.Customer;
 import com.centinela.api.domain.model.Location;
 import com.centinela.api.domain.model.Transaction;
 import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -15,8 +16,18 @@ import java.util.Optional;
  * Implementa {@link TransactionRepositoryPort} sobre Postgres vía Spring Data JPA.
  * Garantiza que customer y location existan (los crea si es necesario) antes de
  * insertar la transacción, ya que la tabla transactions tiene FKs a ambas.
+ *
+ * <p><b>Aislado desde la migración a Cosmos DB</b> (ver
+ * docs/decisions/001-migracion-postgresql-a-cosmosdb.md): esta clase se conserva intacta
+ * para referencia y posible rollback, pero ya no es el adaptador activo. El perfil
+ * "postgres-legacy" está inactivo por defecto, así que Spring no la instancia ni intenta
+ * inyectarle los repositorios JPA — que tampoco existen como beans por defecto, porque
+ * application.properties excluye la autoconfiguración de JPA/DataSource/Flyway. Para
+ * reactivar este adaptador habría que: (1) activar el perfil "postgres-legacy", (2) quitar
+ * esas exclusiones de autoconfiguración, y (3) descomentar la config de datasource.
  */
 @Component
+@Profile("postgres-legacy")
 public class PostgresTransactionRepositoryAdapter implements TransactionRepositoryPort {
 
     private final TransactionJpaRepository transactionJpaRepository;

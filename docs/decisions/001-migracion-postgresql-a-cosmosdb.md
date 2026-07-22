@@ -63,3 +63,50 @@ para referencia y posible rollback.
 
 - Evaluación de costo/viabilidad realizada por el equipo de DevOps/Infra (2026-07-22): confirma
   free tier vigente, recomienda API NoSQL/Core, throughput manual, alertas de presupuesto.
+
+## Implementación (2026-07-22)
+
+El modelo de documentos propuesto arriba se implementó tal cual, con algunos detalles que
+solo aparecen al escribir el código real:
+
+- **Dependencia añadida** (`pom.xml`): `com.azure.spring:spring-cloud-azure-starter-data-cosmos`,
+  con versiones fijadas vía el BOM `com.azure.spring:spring-cloud-azure-dependencies:5.20.1`.
+  Se mantienen `spring-boot-starter-data-jpa`, `postgresql` y `flyway-*` en el classpath solo
+  para que el adapter de Postgres aislado siga compilando — no se usan en tiempo de ejecución.
+- **Documentos** (`CosmosTransactionDocument`, `CosmosCustomerDocument`): equivalentes a las
+  entidades JPA, pero para Cosmos. `CosmosTransactionDocument` usa `customerId` como partition
+  key (`@PartitionKey`) para que las futuras reglas de velocidad (`(customerId, timestamp)`)
+  caigan dentro de una sola partición, igual que hacía el índice `idx_tx_customer_time` en
+  Postgres. La ubicación se embebe como `LocationEmbedded` dentro del documento (denormalizado,
+  sin container propio) — por eso `Location.locationId()` queda siempre en `null` al leer desde
+  Cosmos, ya que dejó de ser una entidad con id propio.
+- **Repositorios** (`CosmosTransactionRepository`, `CosmosCustomerRepository`): interfaces
+  `CosmosRepository<T, String>`, equivalentes a `JpaRepository`. Habilitados vía
+  `@EnableCosmosRepositories` en `CosmosRepositoryConfig`.
+- **Adapter** (`CosmosTransactionRepositoryAdapter`): reemplaza a `PostgresTransactionRepositoryAdapter`
+  como implementación activa de `TransactionRepositoryPort` — el dominio no se tocó. Diferencia
+  de comportamiento a tener presente: Cosmos no tiene transacciones multi-documento entre
+  containers distintos, así que guardar `customer` y `transaction` ya no es atómico como lo era
+  dentro de la `@Transactional` de Postgres (se documenta el trade-off en el código).
+- **`findById(transactionId)` sin `customerId`**: como el puerto de dominio no recibe el
+  customerId al buscar por id, esa búsqueda es cross-partition (recorre todas las particiones),
+  más cara en RU que un point-read dirigido. Aceptable para el volumen de la Semana 1; documentado
+  en `CosmosTransactionRepository` como limitación conocida, no como bug.
+- **Adapter de Postgres aislado**: `PostgresTransactionRepositoryAdapter` quedó marcado
+  `@Profile("postgres-legacy")` (perfil inactivo por defecto) en vez de borrarse, para permitir
+  rollback. `application.properties` excluye explícitamente la autoconfiguración de
+  JPA/DataSource/Flyway (`spring.autoconfigure.exclude=...`) porque, aunque el adapter esté
+  inactivo, esas librerías siguen en el classpath y Spring Boot igual intentaría conectarse a
+  Postgres al arrancar si no se excluyen — es la causa exacta del error original
+  (`Connection to localhost:5432 refused`) que motivó revisar este tema.
+- **Configuración de Cosmos** (`application.properties`): `spring.cloud.azure.cosmos.endpoint`
+  y `.key` se leen de variables de entorno (`AZURE_COSMOS_ENDPOINT`, `AZURE_COSMOS_KEY`), nunca
+  hardcodeadas. En Azure real se debe preferir autenticación Azure AD (Managed Identity /
+  `DefaultAzureCredential`) dejando `.key` vacío, igual que ya se hace con Azure Queue/Blob en
+  este proyecto — pendiente de habilitar cuando el equipo de DevOps/Infra provisione la cuenta real.
+- Verificado con `mvn clean compile`: build exitoso, sin necesidad de una cuenta Cosmos real
+  (no se ejecutó la aplicación contra un endpoint vivo en esta sesión).
+
+**Pendiente:** el equipo de DevOps/Infra todavía debe confirmar el SKU/RU exacto y crear la cuenta real
+(este documento no autoriza aprovisionamiento, solo el código); una vez creada, completar
+`AZURE_COSMOS_ENDPOINT`/`AZURE_COSMOS_KEY` (o Managed Identity) y correr la app contra Cosmos real.
