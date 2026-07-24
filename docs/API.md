@@ -3,6 +3,20 @@
 > Documentación viva de la API de Centinela (sistema de detección de fraude transaccional).
 > Generada a partir del código fuente real (controllers, DTOs, `GlobalExceptionHandler`, `pom.xml`, `application.properties`).
 > Estado del proyecto: **Semana 1 — existen el endpoint de ingesta y el endpoint de consulta por ID de transacciones.** No hay endpoints de reglas de fraude todavía.
+>
+> **Nota de Semana 2:** este documento describe el contrato HTTP público, que **no cambió**
+> en la Semana 2 (no se agregaron endpoints nuevos ni campos al contrato de
+> `TransactionRequestDto`/`TransactionResponseDto`). Lo que sí cambió, fuera de este
+> contrato HTTP, es todo lo que ocurre después de que la API responde: motor de scoring
+> asíncrono, mensajería real (Azure Storage Queue) y almacén de casos — ver
+> `docs/decisions/002-semana2-scoring-mensajeria-y-casos.md`. Además, `POST /api/v1/transactions`
+> ahora aplica límite de tasa (ver esa misma sección de decisiones): al superarlo, responde
+> `429 Too Many Requests` con cabecera `Retry-After`, con el mismo formato de cuerpo de error
+> que el resto de la API. El resto de las referencias a PostgreSQL como motor de persistencia
+> de transacciones en este documento son de la Semana 1 y quedaron obsoletas desde la
+> migración a Cosmos DB (ver `docs/decisions/001-migracion-postgresql-a-cosmosdb.md`); el
+> Postgres reactivado en la Semana 2 es un esquema nuevo y distinto (gestión de casos), no
+> el de este documento.
 
 ---
 
@@ -14,11 +28,13 @@
 | Framework | Spring Boot 3.3.4 (parent `spring-boot-starter-parent`) | `pom.xml` |
 | Web | `spring-boot-starter-web` | `pom.xml` |
 | Validación | `spring-boot-starter-validation` (Jakarta Bean Validation, `jakarta.validation.constraints.*`) | `pom.xml` |
-| Persistencia | `spring-boot-starter-data-jpa` sobre PostgreSQL (driver `org.postgresql:postgresql`, runtime) | `pom.xml` |
-| Base de datos | PostgreSQL 16 (imagen `postgres:16-alpine` en `docker-compose.yml`), local en `localhost:5432/centinela` | `application.properties`, `docker-compose.yml` |
-| Migraciones | Flyway (`flyway-core` + `flyway-database-postgresql`), ubicación `classpath:db/migration`, esquema actual en `V1__init.sql`. Hibernate solo valida el esquema (`spring.jpa.hibernate.ddl-auto=validate`), no lo genera. | `pom.xml`, `application.properties` |
+| Persistencia (transacciones + scores) | Azure Cosmos DB (API NoSQL/Core), vía `spring-cloud-azure-starter-data-cosmos` — desde `docs/decisions/001-migracion-postgresql-a-cosmosdb.md`, ya no PostgreSQL | `pom.xml`, `application.properties` |
+| Persistencia (casos de fraude, Semana 2) | `spring-boot-starter-data-jpa` sobre PostgreSQL (driver `org.postgresql:postgresql`), esquema nuevo y distinto al de transacciones — ver `docs/decisions/002-semana2-scoring-mensajeria-y-casos.md` | `pom.xml`, `application.properties` |
+| Migraciones (casos de fraude) | Flyway (`flyway-core` + `flyway-database-postgresql`), ubicación `classpath:db/casestore/migration`, esquema en `V1__init_casos.sql`. Hibernate solo valida el esquema (`spring.jpa.hibernate.ddl-auto=validate`), no lo genera. | `pom.xml`, `application.properties` |
 | Serialización JSON | Jackson (incluido en `spring-boot-starter-web`) | `pom.xml` |
-| Servicios externos | Azure Storage Queue (`azure-storage-queue`) + Azure Identity (`azure-identity`, pensado para Managed Identity vía `DefaultAzureCredentialBuilder`). **Aún no implementado**: el adaptador real es un placeholder no-op (`NoOpMessageQueueAdapter`) que solo loguea; la integración real con Azure queda para una semana posterior (alcance DevOps/Infra). | `pom.xml`, `NoOpMessageQueueAdapter.java` |
+| Mensajería | Azure Storage Queue (`azure-storage-queue`) + Azure Identity (`azure-identity`, Managed Identity vía `DefaultAzureCredentialBuilder`), dos colas (`transaction-events`, `fraud-cases`) — implementado desde la Semana 2, ver `AzureQueueMessageQueueAdapter`/`AzureFraudCaseQueueAdapter` | `pom.xml`, `docs/decisions/002-semana2-scoring-mensajeria-y-casos.md` |
+| Secretos/configuración dinámica | Azure Key Vault (`azure-security-keyvault-secrets`), umbral de scoring leído sin caché en cada evaluación — ver `KeyVaultScoringThresholdAdapter` | `pom.xml`, `docs/decisions/002-semana2-scoring-mensajeria-y-casos.md` |
+| Control de tasa | Bucket4j (`bucket4j-core`), filtro en memoria sobre `POST /api/v1/transactions` — ver `RateLimitFilter` | `pom.xml` |
 | Testing | `spring-boot-starter-test` | `pom.xml` |
 | Documentación OpenAPI/Swagger automática | **No configurada.** No hay dependencia `springdoc-openapi` (ni ninguna equivalente) en `pom.xml`. Este documento es Markdown escrito a mano con formato inspirado en OpenAPI, no una spec real generada por el código. | `pom.xml` (ausencia verificada) |
 
@@ -218,6 +234,6 @@ GET /api/v1/transactions/txn-2026-0717-000123
 - **No hay manejo explícito de conflicto en la capa JPA.** Si dos requests concurrentes con el mismo `transactionId` llegan casi al mismo tiempo, la verificación de idempotencia (`findById` antes de `save`) no es atómica; una posible violación de constraint única a nivel de base de datos (si existe en `V1__init.sql`) no tiene un `@ExceptionHandler` dedicado en `GlobalExceptionHandler` (por ejemplo, no se captura `DataIntegrityViolationException`). Esto podría resultar en un 500 no documentado. Se recomienda verificar con el equipo de backend si esto es un riesgo real o si Postgres/Spring absorben la condición de carrera.
 - **`amountCents` documentado como `Long`/entero en el DTO, pero no hay tope máximo (`@Max`).** Solo se valida `@Positive`; no hay límite superior declarado en el código, a diferencia de otros campos con `@Size`. No se debe asumir un límite de negocio no declarado.
 - **`merchantCategory` no tiene un formato validado (ej. regex de MCC).** Solo `@NotBlank` y `@Size(max = 10)`; el ejemplo `"5411"` usado en este documento es ilustrativo, no una regla del código.
-- **El adaptador de mensajería a Azure Storage Queue es un no-op** (`NoOpMessageQueueAdapter`). El endpoint de ingesta "publica" en la cola, pero en la práctica hoy solo genera un log de nivel `debug`; no hay entrega real a Azure todavía. Cualquier documentación de consumidores de la cola queda pendiente de esa implementación futura.
+- **(Resuelto en Semana 2)** El adaptador de mensajería a Azure Storage Queue dejó de ser un no-op: `AzureQueueMessageQueueAdapter` publica de verdad en la cola `transaction-events` (vía `DefaultAzureCredentialBuilder`), consumida de forma asíncrona por `TransactionEventConsumer` (motor de scoring). Ver `docs/decisions/002-semana2-scoring-mensajeria-y-casos.md` para el detalle completo, incluida la segunda cola `fraud-cases`.
 - **`GET /api/v1/transactions/{transactionId}` devuelve 404 sin body de error**, mientras que el resto de la API (400/422 vía `GlobalExceptionHandler`) sí devuelve un JSON `{ "timestamp", "status", "error", "message" }` consistente. El 404 se construye directamente en `TransactionController.getById` con `ResponseEntity.notFound().build()` y nunca pasa por `GlobalExceptionHandler`. Esto es una inconsistencia de contrato entre endpoints (un cliente que parsea siempre el mismo shape de error fallará en el caso 404). No se corrige aquí, solo se documenta.
 - **`transactionId` como path variable en el `GET` no tiene ninguna validación** (ni `@Size`, ni patrón, ni `@NotBlank` — de hecho no podría estar en blanco al ser parte de la ruta, pero tampoco hay tope de longitud). No hay endpoints de reglas de fraude/velocidad todavía. No se documenta funcionalidad planeada.

@@ -3,6 +3,7 @@ package com.centinela.api.infrastructure.adapter.outbound.database;
 import com.centinela.api.domain.model.Customer;
 import com.centinela.api.domain.model.Location;
 import com.centinela.api.domain.model.Transaction;
+import com.centinela.api.domain.model.TransactionScore;
 import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -10,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -72,6 +74,28 @@ public class PostgresTransactionRepositoryAdapter implements TransactionReposito
         Location savedLocation = new Location(locationId.longValue(), transaction.location().latitude(),
                 transaction.location().longitude(), transaction.location().description());
         return toDomain(saved, savedLocation);
+    }
+
+    @Override
+    public List<Transaction> findMostRecentByCustomer(String customerId, int limit) {
+        return transactionJpaRepository.findTop50ByCustomerIdOrderByTransactionTimestampDesc(customerId)
+                .stream()
+                .limit(limit)
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
+    public void saveScore(TransactionScore score) {
+        // El esquema legado de Postgres (V1__init.sql) no tiene columnas de score/reglas:
+        // se congeló tal cual quedó en la Semana 1, antes de que existiera el motor de
+        // scoring. Este adapter está detrás de un perfil inactivo (solo referencia/rollback,
+        // ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md); si alguna vez se
+        // reactivara para producción, habría que agregar esas columnas y esta
+        // implementación antes de usarlo con scoring real.
+        throw new UnsupportedOperationException(
+                "saveScore no está implementado en el adapter Postgres legado (esquema pre-Semana 2, "
+                        + "perfil postgres-legacy inactivo). El adapter activo es CosmosTransactionRepositoryAdapter.");
     }
 
     private void ensureCustomerExists(String customerId) {

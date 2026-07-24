@@ -1,4 +1,8 @@
 services:
+  # Postgres del esquema LEGADO de transacciones (Semana 1, pre-Cosmos). Se conserva solo
+  # para levantar PostgresTransactionRepositoryAdapter en modo referencia/rollback (perfil
+  # "postgres-legacy") — ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md. No es el
+  # datasource activo por defecto de la app (ver application.properties).
   postgres:
     image: postgres:16-alpine
     container_name: centinela-postgres
@@ -15,6 +19,44 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # Postgres del almacén de CASOS de fraude (Semana 2, esquema NUEVO — ver
+  # db/casestore/migration). Puerto distinto (5433) porque es una base completamente
+  # separada del Postgres legado de arriba; es el datasource activo por defecto de la app
+  # (ver spring.datasource.* en application.properties).
+  postgres-casos:
+    image: postgres:16-alpine
+    container_name: centinela-postgres-casos
+    environment:
+      POSTGRES_DB: centinela_casos
+      POSTGRES_USER: centinela
+      POSTGRES_PASSWORD: centinela
+    ports:
+      - "5433:5432"
+    volumes:
+      - centinela_postgres_casos_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U centinela -d centinela_casos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Emulador local de Azure Storage Queue. Corre 100% en esta máquina, sin costo ni cuenta
+  # real de Azure — equivalente al cosmosdb-emulator de abajo, pero para Storage Queue.
+  # LIMITACIÓN CONOCIDA: este proyecto autentica siempre vía DefaultAzureCredentialBuilder
+  # (Managed Identity), y Azurite no implementa ese flujo de autenticación de forma
+  # transparente (requiere configuración adicional de OAuth no cubierta aquí). Por eso este
+  # contenedor sirve para inspeccionar manualmente los mensajes encolados (por ejemplo con
+  # Azure Storage Explorer apuntando a la connection string de desarrollo bien conocida de
+  # Azurite) pero NO queda cableado automáticamente con AzureQueueClients tal como está hoy.
+  # Verificar con el equipo de DevOps/Infra si vale la pena resolver esto antes de la Semana 3, o probar
+  # directamente contra una cuenta de Storage real (free tier) en su lugar.
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: centinela-azurite
+    command: "azurite-queue --queueHost 0.0.0.0"
+    ports:
+      - "10001:10001"
 
   # Emulador local de Azure Cosmos DB (API NoSQL). Corre 100% en esta máquina, sin tocar
   # Azure ni generar ningún costo — equivalente al contenedor de postgres de arriba, pero
@@ -34,3 +76,4 @@ services:
 
 volumes:
   centinela_postgres_data:
+  centinela_postgres_casos_data:

@@ -1,14 +1,20 @@
 package com.centinela.api.infrastructure.adapter.outbound.database;
 
+import com.azure.cosmos.models.PartitionKey;
 import com.centinela.api.domain.model.Customer;
 import com.centinela.api.domain.model.Location;
+import com.centinela.api.domain.model.RuleActivation;
 import com.centinela.api.domain.model.Transaction;
+import com.centinela.api.domain.model.TransactionScore;
 import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.StreamSupport;
 
 /**
  * Implementa {@link TransactionRepositoryPort} sobre Azure Cosmos DB vía Spring Data Cosmos.
@@ -90,6 +96,49 @@ public class CosmosTransactionRepositoryAdapter implements TransactionRepository
         }
         cosmosCustomerRepository.save(new CosmosCustomerDocument(
                 customerId, OffsetDateTime.now(ZoneOffset.UTC), Customer.DEFAULT_STATUS));
+    }
+
+    @Override
+    public List<Transaction> findMostRecentByCustomer(String customerId, int limit) {
+        // findAll(PartitionKey) es el método que expone CosmosRepository (heredado de
+        // PagingAndSortingRepository) para iterar SOLO los documentos de una partición —
+        // exactamente el requisito de la Semana 2: "consulta el historial de una única
+        // cuenta", nunca un recorrido cross-partition. El orden/límite se aplican en memoria
+        // porque acá no hace falta paginar contra Cosmos: el TTL del container (ver
+        // CosmosTransactionDocument) ya acota el volumen por partición a una ventana de
+        // 90 días, así que iterar toda la partición y ordenar en memoria es barato.
+        Iterable<CosmosTransactionDocument> partitionDocuments =
+                cosmosTransactionRepository.findAll(new PartitionKey(customerId));
+
+        return StreamSupport.stream(partitionDocuments.spliterator(), false)
+                .sorted(Comparator.comparing(CosmosTransactionDocument::getTransactionTimestamp).reversed())
+                .limit(limit)
+                .map(this::toDomain)
+                .toList();
+    }
+
+    @Override
+    public void saveScore(TransactionScore score) {
+        // Point-read dirigido a la partición correcta (customerId), NO un findById cross-
+        // partition: evita el costo cross-partition documentado en CosmosTransactionRepository
+        // para la búsqueda por id que hace GetTransactionUseCase.
+        CosmosTransactionDocument document = cosmosTransactionRepository
+                .findById(score.transactionId(), new PartitionKey(score.customerId()))
+                .orElseThrow(() -> new IllegalStateException(
+                        "No se encontró la transacción " + score.transactionId()
+                                + " para persistir el score (¿se llamó antes de que la ingesta la persistiera?)"));
+
+        List<CosmosTransactionDocument.RuleActivationEmbedded> activations = score.activations().stream()
+                .map(this::toEmbedded)
+                .toList();
+
+        document.applyScore(score.totalScore(), activations, score.scoredAt().atOffset(ZoneOffset.UTC));
+        cosmosTransactionRepository.save(document);
+    }
+
+    private CosmosTransactionDocument.RuleActivationEmbedded toEmbedded(RuleActivation activation) {
+        return new CosmosTransactionDocument.RuleActivationEmbedded(
+                activation.rule().name(), activation.points(), activation.observedValues());
     }
 
     private Transaction toDomain(CosmosTransactionDocument document) {

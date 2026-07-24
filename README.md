@@ -1,8 +1,10 @@
 # Centinela — API de Ingesta de Transacciones
 
-Sistema de detección de fraude transaccional. Estado actual: Semana 1 (ingesta y consulta
-de transacciones por id). Ver `docs/API.md` para el contrato completo de la API y
-`docs/decisions/` para el historial de decisiones de arquitectura.
+Sistema de detección de fraude transaccional. Estado actual: Semana 2 (motor de scoring
+asíncrono, mensajería real vía Azure Storage Queue, almacén de casos y control de tasa —
+ver `docs/decisions/002-semana2-scoring-mensajeria-y-casos.md`). Ver `docs/API.md` para el
+contrato HTTP completo (no cambió respecto a la Semana 1) y `docs/decisions/` para el
+historial de decisiones de arquitectura.
 
 ## Requisitos
 
@@ -10,12 +12,25 @@ de transacciones por id). Ver `docs/API.md` para el contrato completo de la API 
 - Maven (o el wrapper `./mvnw` si el repo lo trae)
 - Docker + Docker Compose
 
-## Cómo correr el proyecto localmente (motor actual: Cosmos DB)
+## Cómo correr el proyecto localmente (Cosmos DB + Postgres de casos)
 
 Desde la migración documentada en `docs/decisions/001-migracion-postgresql-a-cosmosdb.md`,
-el motor de persistencia activo es **Azure Cosmos DB**, no PostgreSQL. Para desarrollo local
-se usa el emulador de Cosmos DB en Docker — no hace falta ninguna cuenta real de Azure para
-correr ni probar la app.
+el motor de persistencia de transacciones/scores es **Azure Cosmos DB**. Desde la Semana 2
+(ver `docs/decisions/002-semana2-scoring-mensajeria-y-casos.md`), además hace falta un
+**Postgres nuevo y separado** para el almacén de casos de fraude (JPA/Flyway están activos
+de nuevo, acotados a ese esquema — ver `CaseStoreJpaConfig`). Para desarrollo local se usan
+los emuladores/contenedores de Docker — no hace falta ninguna cuenta real de Azure para
+correr ni probar la app (Azure Storage Queue y Key Vault degradan solos a un modo sin-op
+logueado si no se configuran, ver `AzureQueueClients`/`KeyVaultScoringThresholdAdapter`).
+
+**0. Levantar el Postgres del almacén de casos (obligatorio para arrancar desde la Semana 2):**
+
+```bash
+docker compose up -d postgres-casos
+```
+
+Con la configuración por defecto (`application.properties`) no hace falta exportar nada
+más: apunta a `localhost:5433/centinela_casos`, que es justo lo que expone este contenedor.
 
 **1. Levantar el emulador de Cosmos DB:**
 
@@ -96,6 +111,12 @@ curl -X POST http://localhost:8081/api/v1/transactions \
 
 curl http://localhost:8081/api/v1/transactions/tx_001
 ```
+
+Sin `AZURE_STORAGE_QUEUE_ENDPOINT`/`AZURE_KEYVAULT_ENDPOINT` configurados, la transacción
+se persiste igual, pero el evento no se publica de verdad (solo se loguea una advertencia) —
+el motor de scoring (`TransactionEventConsumer`) no la procesará hasta que exista una cuenta
+real de Storage Queue. Ver `docker-compose.yml` (servicio `azurite`) para el emulador local
+de Storage Queue y sus limitaciones conocidas frente a `DefaultAzureCredentialBuilder`.
 
 ## Motor de persistencia anterior (PostgreSQL, aislado)
 

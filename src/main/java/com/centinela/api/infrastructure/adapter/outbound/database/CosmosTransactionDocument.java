@@ -6,6 +6,9 @@ import org.springframework.data.annotation.Id;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Documento de Cosmos DB para una transacción. Es el equivalente a {@link TransactionEntity}
@@ -39,9 +42,22 @@ import java.time.OffsetDateTime;
  * modelar "uno-a-uno" en NoSQL — evita una consulta extra (Cosmos no soporta JOIN entre
  * containers), a costa de duplicar los datos de ubicación si dos transacciones ocurren en el
  * mismo lugar. Esa duplicación es aceptable aquí porque una ubicación pesa pocos bytes.
+ *
+ * <p><b>TTL (Semana 2):</b> {@code timeToLive = 7_776_000} segundos (90 días). Justificación
+ * (ver docs/decisions/002-semana2-scoring-mensajeria-y-casos.md para el detalle completo):
+ * la regla de MONTO ATÍPICO necesita una línea base histórica razonable del comportamiento
+ * de gasto de la cuenta (capturar patrones mensuales/estacionales), mientras que VELOCIDAD y
+ * GEO-IMPOSIBLE solo miran los últimos minutos/la transacción inmediatamente anterior. 90 días
+ * cubre generosamente el caso más exigente (monto atípico) sin acumular indefinidamente
+ * almacenamiento del free tier (25 GB). El motor de scoring además acota cada consulta a
+ * {@code historyLimit} documentos (ver {@code CosmosTransactionRepositoryAdapter}), así que el
+ * TTL protege el costo de almacenamiento, no el de RU de cada consulta puntual.
  */
-@Container(containerName = "transactions")
+@Container(containerName = "transactions", timeToLive = CosmosTransactionDocument.TTL_SECONDS)
 public class CosmosTransactionDocument {
+
+    /** 90 días. Ver el javadoc de la clase para la justificación completa. */
+    static final int TTL_SECONDS = 90 * 24 * 60 * 60;
 
     /**
      * El {@code @Id} de Cosmos SIEMPRE se serializa como el campo "id" del documento JSON.
@@ -66,6 +82,18 @@ public class CosmosTransactionDocument {
     private LocationEmbedded location;
     private String merchantId;
     private String merchantCategory;
+
+    /**
+     * Campos de scoring (Semana 2), poblados por el motor de scoring en un segundo
+     * escritura (read-modify-write) DESPUÉS de que la ingesta ya insertó el documento
+     * base — ver {@code CosmosTransactionRepositoryAdapter#saveScore}. Quedan en
+     * {@code null}/vacío entre el instante en que la API responde y el instante en que
+     * el consumidor de {@code transaction-events} procesa el evento; eso es exactamente
+     * el desacoplamiento que exige la Semana 2.
+     */
+    private Integer score;
+    private List<RuleActivationEmbedded> ruleActivations = new ArrayList<>();
+    private OffsetDateTime scoredAt;
 
     protected CosmosTransactionDocument() {
         // Requerido por el SDK de Cosmos para deserializar documentos leídos de la base.
@@ -119,6 +147,64 @@ public class CosmosTransactionDocument {
 
     public String getMerchantCategory() {
         return merchantCategory;
+    }
+
+    public Integer getScore() {
+        return score;
+    }
+
+    public List<RuleActivationEmbedded> getRuleActivations() {
+        return ruleActivations;
+    }
+
+    public OffsetDateTime getScoredAt() {
+        return scoredAt;
+    }
+
+    /**
+     * Aplica el resultado del motor de scoring sobre un documento ya existente
+     * (mutación in-place antes de volver a guardarlo con {@code save()}, que hace
+     * upsert). No hay un setter por campo individual a propósito: el score y su
+     * detalle siempre se escriben juntos, nunca parcialmente.
+     */
+    public void applyScore(int score, List<RuleActivationEmbedded> ruleActivations, OffsetDateTime scoredAt) {
+        this.score = score;
+        this.ruleActivations = new ArrayList<>(ruleActivations);
+        this.scoredAt = scoredAt;
+    }
+
+    /**
+     * Detalle de una regla activada, embebido dentro del documento de la transacción.
+     * {@code observedValues} persiste los valores CONCRETOS observados (no solo el id
+     * de la regla) — requisito explícito de la Semana 2 del que depende el explicador
+     * de casos de la Semana 3 (ver {@link com.centinela.api.domain.model.RuleActivation}).
+     */
+    public static class RuleActivationEmbedded {
+        private String ruleId;
+        private int points;
+        private Map<String, Object> observedValues;
+
+        protected RuleActivationEmbedded() {
+            // Requerido por el SDK de Cosmos para deserializar documentos leídos de la base.
+        }
+
+        public RuleActivationEmbedded(String ruleId, int points, Map<String, Object> observedValues) {
+            this.ruleId = ruleId;
+            this.points = points;
+            this.observedValues = observedValues;
+        }
+
+        public String getRuleId() {
+            return ruleId;
+        }
+
+        public int getPoints() {
+            return points;
+        }
+
+        public Map<String, Object> getObservedValues() {
+            return observedValues;
+        }
     }
 
     /**
