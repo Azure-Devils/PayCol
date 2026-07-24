@@ -13,6 +13,21 @@
     },
     "budgetContactEmail": {
       "value": "sixorca00@gmail.com"
+    },
+    "transactionsDefaultTtlSeconds": {
+      "value": 7776000
+    },
+    "appManagedIdentityPrincipalId": {
+      "value": ""
+    },
+    "appManagedIdentityDisplayName": {
+      "value": "centinela-backend-identity"
+    },
+    "humanAdminObjectId": {
+      "value": ""
+    },
+    "humanAdminUpn": {
+      "value": ""
     }
   }
 }

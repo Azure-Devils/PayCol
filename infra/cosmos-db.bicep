@@ -25,6 +25,10 @@ param sharedThroughputRU int = 1000
 @description('Tags para identificación/limpieza.')
 param tags object
 
+@description('TTL por defecto (segundos) del container "transactions": 90 días (7776000s). Justificación completa en docs/decisions/002-ttl-transacciones-y-respaldo-postgres-casos.md — resumen: la ventana más larga de las cuatro reglas de detección es la de "monto atípico" (comportamiento histórico de la cuenta), que necesita varias semanas de historial para ser confiable; 90 días da margen holgado sin acumular indefinidamente el volumen de escritura constante que describe la Semana 2, ayudando a permanecer dentro de los 25 GB del free tier. NO se aplica al container "customers" (entidad de referencia, no debe expirar).')
+@minValue(0)
+param transactionsDefaultTtlSeconds int = 7776000
+
 // -----------------------------------------------------------------------------
 // Cuenta Cosmos DB
 // -----------------------------------------------------------------------------
@@ -88,6 +92,13 @@ resource transactionsContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabas
         ]
         kind: 'Hash'
       }
+      // defaultTtl activa la expiración automática de documentos: cada
+      // transacción se borra sola transactionsDefaultTtlSeconds (90 días por
+      // defecto) después de su última modificación, sin intervención manual
+      // ni job de limpieza aparte. Un valor por documento (si algún día se
+      // necesita) podría sobreescribir este default con su propio "ttl".
+      // Justificación completa: docs/decisions/002-ttl-transacciones-y-respaldo-postgres-casos.md.
+      defaultTtl: transactionsDefaultTtlSeconds
     }
     // Sin "options.throughput" a propósito: si este container tuviera throughput
     // propio, dejaría de compartir el pool del free tier con "customers" y la
