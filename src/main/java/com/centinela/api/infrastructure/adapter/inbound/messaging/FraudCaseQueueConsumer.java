@@ -19,13 +19,14 @@ import java.util.Base64;
 
 /**
  * Adaptador de entrada que hace polling de la cola {@code fraud-cases} y abre el
- * caso correspondiente en el almacén relacional (ver
- * {@code JpaFraudCaseRepositoryAdapter}).
+ * caso correspondiente en el almacén de casos (Cosmos DB, container {@code cases} —
+ * ver {@code CosmosFraudCaseRepositoryAdapter} y
+ * docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md).
  *
  * <p><b>Garantía de no pérdida (requisito central de esta cola, sección 2.4 del
  * TDD):</b> el mensaje SOLO se borra de la cola después de que
  * {@link OpenFraudCaseUseCase#openCase(FraudCaseEvent)} retorna con éxito (es
- * decir, después de que el caso quedó persistido en Postgres). Si este proceso
+ * decir, después de que el caso quedó persistido en Cosmos DB). Si este proceso
  * está caído, los mensajes simplemente se acumulan en la cola — Azure Storage
  * Queue los retiene hasta 7 días por defecto — y se procesan todos, sin pérdidas,
  * en cuanto el consumidor se restablece. Esto es exactamente lo que pide el

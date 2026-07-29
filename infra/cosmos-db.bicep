@@ -126,6 +126,31 @@ resource customersContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/
   }
 }
 
+// -----------------------------------------------------------------------------
+// Container "cases" — almacén de casos de fraude (reemplaza al Postgres
+// Flexible Server que nunca se desplegó, ver docs/decisions/004). Partition key
+// /transactionId (no /customerId): los dos accesos del puerto de dominio
+// (existsByTransactionId, openCase) siempre filtran por transactionId, así que
+// esto convierte el chequeo de idempotencia en un point-read barato en vez de
+// un cross-partition scan. Sin defaultTtl a propósito: un caso de fraude no
+// debe expirar solo. Sin throughput propio: comparte el pool de 1000 RU/s.
+// -----------------------------------------------------------------------------
+resource casesContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/containers@2023-11-15' = {
+  parent: sqlDatabase
+  name: 'cases'
+  properties: {
+    resource: {
+      id: 'cases'
+      partitionKey: {
+        paths: [
+          '/transactionId'
+        ]
+        kind: 'Hash'
+      }
+    }
+  }
+}
+
 @description('Nombre real de la cuenta creada.')
 output accountName string = cosmosAccount.name
 

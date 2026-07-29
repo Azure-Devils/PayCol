@@ -6,9 +6,9 @@
 //
 // Este módulo crea el vault y (opcionalmente, solo si se le pasan los
 // parámetros correspondientes) las asignaciones de rol RBAC. Deliberadamente
-// NO crea los secretos con valores reales: la app necesita 4 secretos
-// lógicos (endpoint/key de Cosmos, connection string de Postgres de casos,
-// umbral de fraude), pero sus VALORES se cargan después del deploy vía
+// NO crea los secretos con valores reales: la app necesita 3 secretos
+// lógicos (endpoint/key de Cosmos, umbral de fraude), pero sus VALORES se
+// cargan después del deploy vía
 // `az keyvault secret set` (imperativo, fuera de Bicep) — nunca como
 // parámetro de este template, para que un valor real jamás quede en el
 // historial de `az deployment` ni en este repo.
@@ -67,7 +67,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 7
     enablePurgeProtection: false
-    publicNetworkAccess: 'Enabled' // Sin restricción de red: demo académica, no hay VNet de gestión hacia el vault. Revisar si conviene restringir junto con la VNet de infra/postgres-cases.bicep.
+    publicNetworkAccess: 'Enabled' // Sin restricción de red: demo académica, no hay VNet de gestión hacia el vault.
     networkAcls: {
       defaultAction: 'Allow'
       bypass: 'AzureServices'
@@ -124,7 +124,6 @@ resource adminRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01
 //   2. Cargar los valores reales imperativamente, fuera de Bicep:
 //        az keyvault secret set --vault-name <kv> --name cosmos-endpoint --value "<valor>"
 //        az keyvault secret set --vault-name <kv> --name cosmos-key --value "<valor>"
-//        az keyvault secret set --vault-name <kv> --name postgres-connection-string --value "<valor>"
 //        az keyvault secret set --vault-name <kv> --name fraud-threshold --value "<valor>"
 //   3. NO volver a pasar esos parámetros en despliegues futuros de este mismo
 //      módulo, para no arriesgarse a sobreescribir un valor real con uno
@@ -138,10 +137,6 @@ param cosmosEndpointValue string = ''
 @description('Clave primaria de Cosmos DB (AZURE_COSMOS_KEY) — SÍ es sensible. Idealmente debe dejar de usarse una vez que el equipo de backend cablee DefaultAzureCredential para Cosmos SQL API (ver docs/decisions/001). Vacío por defecto: no se crea el secreto.')
 @secure()
 param cosmosKeyValue string = ''
-
-@description('Connection string (o los componentes host/db/sslmode, sin password si se usa auth AAD — ver infra/postgres-cases.bicep) del Postgres de casos de fraude. Vacío por defecto: no se crea el secreto.')
-@secure()
-param postgresConnectionStringValue string = ''
 
 @description('Umbral de score de fraude (fraud threshold) a partir del cual se abre un caso. Se modela como secreto dinámico (no una env var fija) precisamente para que el equipo de backend pueda leerlo/modificarlo sin requerir un nuevo despliegue — requisito explícito de la Semana 2 (umbral configurable sin redeploy). Vacío por defecto: no se crea el secreto; el valor inicial debe acordarse con el equipo de backend según el criterio de falsos positivos vs. fraude no detectado.')
 @secure()
@@ -160,14 +155,6 @@ resource secretCosmosKey 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!e
   name: 'cosmos-key'
   properties: {
     value: cosmosKeyValue
-  }
-}
-
-resource secretPostgresConnectionString 'Microsoft.KeyVault/vaults/secrets@2023-07-01' = if (!empty(postgresConnectionStringValue)) {
-  parent: keyVault
-  name: 'postgres-connection-string'
-  properties: {
-    value: postgresConnectionStringValue
   }
 }
 

@@ -1,45 +1,10 @@
 services:
-  # Postgres del esquema LEGADO de transacciones (Semana 1, pre-Cosmos). Se conserva solo
-  # para levantar PostgresTransactionRepositoryAdapter en modo referencia/rollback (perfil
-  # "postgres-legacy") — ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md. No es el
-  # datasource activo por defecto de la app (ver application.properties).
-  postgres:
-    image: postgres:16-alpine
-    container_name: centinela-postgres
-    environment:
-      POSTGRES_DB: centinela
-      POSTGRES_USER: centinela
-      POSTGRES_PASSWORD: centinela
-    ports:
-      - "5432:5432"
-    volumes:
-      - centinela_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U centinela -d centinela"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # Postgres del almacén de CASOS de fraude (Semana 2, esquema NUEVO — ver
-  # db/casestore/migration). Puerto distinto (5433) porque es una base completamente
-  # separada del Postgres legado de arriba; es el datasource activo por defecto de la app
-  # (ver spring.datasource.* en application.properties).
-  postgres-casos:
-    image: postgres:16-alpine
-    container_name: centinela-postgres-casos
-    environment:
-      POSTGRES_DB: centinela_casos
-      POSTGRES_USER: centinela
-      POSTGRES_PASSWORD: centinela
-    ports:
-      - "5433:5432"
-    volumes:
-      - centinela_postgres_casos_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U centinela -d centinela_casos"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+  # PostgreSQL se eliminó por completo del proyecto (ver
+  # docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md): tanto el esquema legado de
+  # transacciones (perfil "postgres-legacy", pre-Cosmos) como el almacén NUEVO de casos de
+  # fraude de la Semana 2 (que nunca llegó a desplegarse contra un servidor real) se
+  # reemplazaron por Cosmos DB. Ya no hacen falta contenedores de Postgres en este compose —
+  # el emulador de Cosmos DB de abajo cubre ambos usos (transactions/customers/cases).
 
   # Emulador local de Azure Storage Queue. Corre 100% en esta máquina, sin costo ni cuenta
   # real de Azure — equivalente al cosmosdb-emulator de abajo, pero para Storage Queue.
@@ -59,8 +24,9 @@ services:
       - "10001:10001"
 
   # Emulador local de Azure Cosmos DB (API NoSQL). Corre 100% en esta máquina, sin tocar
-  # Azure ni generar ningún costo — equivalente al contenedor de postgres de arriba, pero
-  # para Cosmos. Ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md.
+  # Azure ni generar ningún costo. Aloja los tres containers de la app: transactions,
+  # customers y cases (casos de fraude, ver docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md).
+  # Ver también docs/decisions/001-migracion-postgresql-a-cosmosdb.md para el contexto original.
   # La key de abajo NO es un secreto: es la clave fija de desarrollo que Microsoft publica
   # para este emulador (siempre la misma, igual para todo el mundo, solo válida en local).
   cosmosdb-emulator:
@@ -74,6 +40,3 @@ services:
       - "8085:8081"
       - "10250-10255:10250-10255"
 
-volumes:
-  centinela_postgres_data:
-  centinela_postgres_casos_data:

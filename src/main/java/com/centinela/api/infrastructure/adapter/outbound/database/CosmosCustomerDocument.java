@@ -7,7 +7,10 @@ import org.springframework.data.annotation.Id;
 import java.time.OffsetDateTime;
 
 /**
- * Documento de Cosmos DB para un cliente. Equivalente a {@link CustomerEntity} (JPA).
+ * Documento de Cosmos DB para un cliente. Equivalente a la extinta entidad JPA
+ * {@code CustomerEntity} del esquema legado de transacciones en Postgres (eliminado
+ * por completo del proyecto — ver
+ * docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md).
  *
  * <p>Se usa {@code customerId} tanto como {@code @Id} (identificador único del documento)
  * como partition key: como este container es pequeño y cada cliente se consulta siempre por

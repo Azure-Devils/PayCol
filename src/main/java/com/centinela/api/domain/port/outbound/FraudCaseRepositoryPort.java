@@ -4,11 +4,14 @@ import com.centinela.api.domain.model.FraudCase;
 import com.centinela.api.domain.model.FraudCaseEvent;
 
 /**
- * Puerto de salida hacia el almacén relacional de casos de fraude (sección 2.2
- * del TDD de Semana 2). Lo implementa un adaptador JPA/Postgres NUEVO y distinto
- * al esquema legado de transacciones (ver
- * {@code infrastructure.adapter.outbound.casestore}) — este Postgres gestiona
- * casos, no reemplaza a Cosmos DB como almacén de transacciones.
+ * Puerto de salida hacia el almacén de casos de fraude (sección 2.2 del TDD de
+ * Semana 2). Lo implementa {@code CosmosFraudCaseRepositoryAdapter}, sobre un
+ * container de Cosmos DB ({@code cases}) separado del container
+ * {@code transactions} — ver {@code infrastructure.adapter.outbound.casestore} y
+ * docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md. Este puerto llegó a
+ * tener una implementación relacional (Postgres) durante la Semana 2, pero ese
+ * Postgres se eliminó del proyecto por completo antes de desplegarse contra un
+ * servidor real.
  */
 public interface FraudCaseRepositoryPort {
 

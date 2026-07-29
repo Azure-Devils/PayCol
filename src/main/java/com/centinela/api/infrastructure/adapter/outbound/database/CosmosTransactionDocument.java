@@ -11,9 +11,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Documento de Cosmos DB para una transacción. Es el equivalente a {@link TransactionEntity}
- * (JPA), pero para una base de datos NoSQL orientada a documentos en vez de una tabla
- * relacional. Conceptos nuevos frente a Postgres/JPA, explicados para quien nunca usó Cosmos:
+ * Documento de Cosmos DB para una transacción. Es el equivalente a la extinta entidad JPA
+ * {@code TransactionEntity} del esquema legado (Postgres, eliminado por completo del
+ * proyecto — ver docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md), pero para una
+ * base de datos NoSQL orientada a documentos en vez de una tabla relacional. Conceptos nuevos
+ * frente a Postgres/JPA, explicados para quien nunca usó Cosmos:
  *
  * <p><b>Container:</b> es el equivalente aproximado a una "tabla", pero sin un esquema fijo:
  * cada documento del container puede tener campos distintos. Aquí lo usamos con un esquema
@@ -209,8 +211,8 @@ public class CosmosTransactionDocument {
 
     /**
      * Ubicación embebida dentro del documento de la transacción (ver comentario de
-     * denormalización en {@link CosmosTransactionDocument}). A diferencia de
-     * {@link LocationEntity} en Postgres, no tiene su propio id: no es una fila en otra
+     * denormalización en {@link CosmosTransactionDocument}). A diferencia de la extinta
+     * {@code LocationEntity} de Postgres, no tiene su propio id: no es una fila en otra
      * tabla, es solo un objeto JSON anidado dentro de este documento. Por eso tampoco existe
      * ya la restricción {@code UNIQUE (latitude, longitude)} que había en Postgres — en
      * Cosmos esa unicidad tendría que resolverse a nivel de aplicación si se necesitara,

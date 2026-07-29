@@ -18,16 +18,18 @@ import java.util.stream.StreamSupport;
 
 /**
  * Implementa {@link TransactionRepositoryPort} sobre Azure Cosmos DB vía Spring Data Cosmos.
- * Reemplaza a {@link PostgresTransactionRepositoryAdapter} (que se conserva aislado, ver esa
- * clase) como adaptador activo por defecto — ver
- * docs/decisions/001-migracion-postgresql-a-cosmosdb.md para el contexto de la migración.
+ * Reemplazó a la extinta {@code PostgresTransactionRepositoryAdapter} (perfil
+ * {@code postgres-legacy}, eliminada del repo junto con el resto de PostgreSQL — ver
+ * docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md) como adaptador activo por
+ * defecto — ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md para el contexto
+ * original de la migración.
  *
  * <p>El dominio ({@code TransactionRepositoryPort}, {@code Transaction}, {@code Location})
  * no cambió en absoluto: es exactamente la ventaja de la arquitectura hexagonal — solo se
  * reemplazó este adaptador de infraestructura.
  *
- * <p>Diferencia clave frente al adaptador de Postgres: allí "ensureLocationExists" buscaba
- * una fila existente por (latitude, longitude) para reusar su location_id (evitando
+ * <p>Diferencia clave frente al extinto adaptador de Postgres: allí "ensureLocationExists"
+ * buscaba una fila existente por (latitude, longitude) para reusar su location_id (evitando
  * duplicados gracias a la restricción UNIQUE de la tabla). En Cosmos no hay tabla de
  * ubicaciones ni esa restricción (la ubicación va embebida en cada documento de transacción,
  * ver {@link CosmosTransactionDocument}), así que ese paso de deduplicación simplemente

@@ -53,35 +53,16 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-        <!-- spring-boot-starter-data-jpa, postgresql, flyway-*: ACTIVOS de nuevo desde la
-             Semana 2, pero para un uso distinto al original: el almacén relacional NUEVO de
-             casos de fraude (ver infrastructure.adapter.outbound.casestore), acotado vía
-             CaseStoreJpaConfig (@EntityScan/@EnableJpaRepositories con basePackages
-             explícito) para NO tocar las entidades JPA legadas de transacciones
-             (TransactionEntity/CustomerEntity/LocationEntity, aisladas detrás del perfil
-             "postgres-legacy" desde la migración a Cosmos DB — ver
-             docs/decisions/001-migracion-postgresql-a-cosmosdb.md). Esas entidades legadas
-             siguen compilando gracias a estas mismas dependencias, aunque ya no las use
-             Hibernate en tiempo de ejecución. -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-core</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-database-postgresql</artifactId>
-        </dependency>
+        <!-- PostgreSQL/JPA/Flyway se eliminaron por completo del proyecto (ver
+             docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md): el almacén
+             relacional NUEVO de casos de fraude introducido en la Semana 2 nunca llegó a
+             desplegarse contra un servidor real y su costo (~12-13 USD/mes de Postgres
+             Flexible Server) se descartó a favor de consolidar también los casos en el
+             free tier permanente de Cosmos DB (ver infrastructure.adapter.outbound.casestore,
+             container "cases"). El perfil "postgres-legacy" de transacciones (pre-Cosmos,
+             ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md) se eliminó en el
+             mismo cambio, ya que dejó de tener sentido conservarlo una vez que se retira
+             PostgreSQL del proyecto entero. -->
 
         <dependency>
             <groupId>com.azure</groupId>
