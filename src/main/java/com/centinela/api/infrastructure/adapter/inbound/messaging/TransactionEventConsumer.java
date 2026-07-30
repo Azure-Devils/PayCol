@@ -28,17 +28,20 @@ public class TransactionEventConsumer {
     private final ObjectMapper objectMapper;
     private final int maxMessagesPerPoll;
     private final Duration visibilityTimeout;
+    private final String transactionQueueName;
 
     public TransactionEventConsumer(AzureQueueClients queues,
                                      ScoreTransactionUseCase scoreTransactionUseCase,
                                      ObjectMapper objectMapper,
                                      @Value("${azure.queue.transaction-events-max-messages-per-poll:10}") int maxMessagesPerPoll,
-                                     @Value("${azure.queue.transaction-events-visibility-timeout-seconds:30}") long visibilityTimeoutSeconds) {
+                                     @Value("${azure.queue.transaction-events-visibility-timeout-seconds:30}") long visibilityTimeoutSeconds,
+                                     @Value("${azure.queue.transaction-events-name:transaction-ingest}") String transactionQueueName) {
         this.queues = queues;
         this.scoreTransactionUseCase = scoreTransactionUseCase;
         this.objectMapper = objectMapper;
         this.maxMessagesPerPoll = maxMessagesPerPoll;
         this.visibilityTimeout = Duration.ofSeconds(visibilityTimeoutSeconds);
+        this.transactionQueueName = transactionQueueName;
     }
 
     @Scheduled(fixedDelayString = "${azure.queue.transaction-events-poll-interval-ms:2000}")
@@ -52,7 +55,7 @@ public class TransactionEventConsumer {
             client.receiveMessages(maxMessagesPerPoll, visibilityTimeout, null, Context.NONE)
                     .forEach(message -> processMessage(client, message));
         } catch (Exception e) {
-            log.error("Error al recibir mensajes de 'transaction-events': {}", e.getMessage(), e);
+            log.error("Error al recibir mensajes de '{}': {}", transactionQueueName, e.getMessage(), e);
         }
     }
 
@@ -63,9 +66,9 @@ public class TransactionEventConsumer {
             client.deleteMessage(message.getMessageId(), message.getPopReceipt());
         } catch (Exception e) {
             if (message.getDequeueCount() > MAX_DEQUEUE_COUNT) {
-                log.error("Mensaje {} de 'transaction-events' superó el máximo de reintentos ({}); se descarta "
+                log.error("Mensaje {} de '{}' superó el máximo de reintentos ({}); se descarta "
                                 + "sin puntuar. Causa: {}",
-                        message.getMessageId(), MAX_DEQUEUE_COUNT, e.getMessage(), e);
+                        message.getMessageId(), transactionQueueName, MAX_DEQUEUE_COUNT, e.getMessage(), e);
                 client.deleteMessage(message.getMessageId(), message.getPopReceipt());
             } else {
                 log.warn("Fallo puntuando el mensaje {} (intento {}/{}); quedará visible de nuevo tras el "

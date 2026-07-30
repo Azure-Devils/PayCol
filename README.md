@@ -118,6 +118,26 @@ el motor de scoring (`TransactionEventConsumer`) no la procesará hasta que exis
 real de Storage Queue. Ver `docker-compose.yml` (servicio `azurite`) para el emulador local
 de Storage Queue y sus limitaciones conocidas frente a `DefaultAzureCredentialBuilder`.
 
+### Configuración de Storage en Azure
+
+Para que cada transacción use los tres destinos, configurar estos *App settings* en
+`app-centinela-api` y reiniciar/desplegar la aplicación:
+
+```
+AZURE_STORAGE_BLOB_ENDPOINT=https://stcentineladev010.blob.core.windows.net/
+AZURE_STORAGE_RECEIPTS_CONTAINER_NAME=identify-documents
+AZURE_STORAGE_QUEUE_ENDPOINT=https://stcentineladev010.queue.core.windows.net/
+AZURE_QUEUE_TRANSACTION_EVENTS_NAME=transaction-ingest
+```
+
+`identify-documents` debe existir en **Blob containers**. `transaction-ingest`
+debe existir en **Queues** (Queue service); un recurso mostrado dentro de
+"Containers" es un blob container y no puede recibir mensajes de Azure Queue.
+La identidad administrada de `app-centinela-api` requiere los roles `Storage Blob
+Data Contributor` sobre el contenedor y `Storage Queue Data Contributor` sobre la
+cuenta o la cola. El consumidor interno toma el mensaje de la cola para puntuarlo y
+lo elimina cuando termina, por lo que es normal que la cola se vacíe rápidamente.
+
 ## Motor de persistencia anterior (PostgreSQL, aislado)
 
 El código de PostgreSQL se conserva para referencia/rollback (ver

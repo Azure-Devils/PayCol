@@ -18,19 +18,23 @@ public class AzureQueueMessageQueueAdapter implements MessageQueuePort {
 
     private final AzureQueueClients queues;
     private final ObjectMapper objectMapper;
+    private final String transactionQueueName;
 
-    public AzureQueueMessageQueueAdapter(AzureQueueClients queues, ObjectMapper objectMapper) {
+    public AzureQueueMessageQueueAdapter(AzureQueueClients queues, ObjectMapper objectMapper,
+                                         @org.springframework.beans.factory.annotation.Value("${azure.queue.transaction-events-name:transaction-ingest}")
+                                         String transactionQueueName) {
         this.queues = queues;
         this.objectMapper = objectMapper;
+        this.transactionQueueName = transactionQueueName;
     }
 
     @Override
     public void publish(Transaction transaction) {
         var client = queues.transactionEvents();
         if (client.isEmpty()) {
-            log.warn("Cola 'transaction-events' no configurada; transacción {} no se publicó "
+            log.warn("Cola '{}' no configurada; transacción {} no se publicó "
                     + "(el motor de scoring no la procesará hasta que la cola esté disponible).",
-                    transaction.transactionId());
+                    transactionQueueName, transaction.transactionId());
             return;
         }
 
@@ -41,7 +45,7 @@ public class AzureQueueMessageQueueAdapter implements MessageQueuePort {
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(
                     "No se pudo serializar la transacción " + transaction.transactionId()
-                            + " para publicarla en 'transaction-events'", e);
+                            + " para publicarla en '" + transactionQueueName + "'", e);
         }
     }
 }

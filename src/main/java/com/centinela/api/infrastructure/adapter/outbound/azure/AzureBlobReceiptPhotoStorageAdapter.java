@@ -23,7 +23,7 @@ public class AzureBlobReceiptPhotoStorageAdapter implements ReceiptPhotoStorageP
 
     public AzureBlobReceiptPhotoStorageAdapter(
             @Value("${azure.blob.endpoint:}") String endpoint,
-            @Value("${azure.blob.receipts-container-name:transaction-receipts}") String containerName) {
+            @Value("${azure.blob.receipts-container-name:identify-documents}") String containerName) {
 
         if (endpoint == null || endpoint.isBlank()) {
             log.warn("azure.blob.endpoint (env var AZURE_STORAGE_BLOB_ENDPOINT) no configurado; "
@@ -68,6 +68,9 @@ public class AzureBlobReceiptPhotoStorageAdapter implements ReceiptPhotoStorageP
         } catch (Exception e) {
             log.error("No se pudo almacenar la foto de comprobante de la transaccion {}: {}",
                     transactionId, e.getMessage());
+            // El caso de uso necesita conocer el fallo para no responder que la foto se
+            // subió cuando Azure la rechazó (por ejemplo, por falta de RBAC).
+            throw new IllegalStateException("No se pudo almacenar la foto de comprobante", e);
         }
     }
 

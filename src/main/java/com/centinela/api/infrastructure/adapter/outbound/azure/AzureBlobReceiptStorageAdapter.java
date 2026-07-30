@@ -24,7 +24,7 @@ public class AzureBlobReceiptStorageAdapter implements TransactionReceiptStorage
 
     public AzureBlobReceiptStorageAdapter(
             @Value("${azure.blob.endpoint:}") String endpoint,
-            @Value("${azure.blob.receipts-container-name:transaction-receipts}") String containerName) {
+            @Value("${azure.blob.receipts-container-name:identify-documents}") String containerName) {
 
         if (endpoint == null || endpoint.isBlank()) {
             log.warn("azure.blob.endpoint (env var AZURE_STORAGE_BLOB_ENDPOINT) no configurado; "

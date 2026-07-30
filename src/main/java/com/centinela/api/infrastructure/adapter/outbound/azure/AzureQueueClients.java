@@ -21,7 +21,7 @@ public class AzureQueueClients {
 
     public AzureQueueClients(
             @Value("${azure.queue.endpoint:}") String endpoint,
-            @Value("${azure.queue.transaction-events-name:transaction-events}") String transactionEventsQueueName,
+            @Value("${azure.queue.transaction-events-name:transaction-ingest}") String transactionEventsQueueName,
             @Value("${azure.queue.fraud-cases-name:fraud-cases}") String fraudCasesQueueName) {
 
         if (endpoint == null || endpoint.isBlank()) {
