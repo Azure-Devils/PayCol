@@ -6,7 +6,6 @@ import com.centinela.api.domain.model.Transaction;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-/** Helpers compartidos por los tests de reglas, para no repetir la construcción de records. */
 final class RuleTestSupport {
 
     private RuleTestSupport() {

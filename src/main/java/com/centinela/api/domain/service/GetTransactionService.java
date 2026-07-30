@@ -6,13 +6,6 @@ import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
 
 import java.util.Optional;
 
-/**
- * Implementación del caso de uso de consulta. Lógica de dominio pura:
- * no importa Spring ni el SDK de Azure.
- *
- * Delega directamente en el puerto de salida; una consulta simple por
- * clave primaria no requiere lógica de negocio adicional.
- */
 public class GetTransactionService implements GetTransactionUseCase {
 
     private final TransactionRepositoryPort transactionRepository;

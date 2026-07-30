@@ -13,14 +13,6 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Centraliza el manejo de errores de la API.
- *
- * Anti-polución de payloads (sección 4.2 del TDD): cualquier campo no
- * contemplado en el contrato (UnrecognizedPropertyException) o cualquier
- * violación de las anotaciones @Valid del DTO de entrada resulta en
- * 422 Unprocessable Entity.
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 

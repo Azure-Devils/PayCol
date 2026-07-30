@@ -20,7 +20,7 @@ public class TransactionWebMapper {
                 dto.amountCents(),
                 dto.currency(),
                 dto.transactionTimestamp(),
-                null, // ingestion_timestamp lo fija siempre el servidor en el dominio
+                null,
                 location,
                 dto.merchantId(),
                 dto.merchantCategory()

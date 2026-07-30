@@ -20,13 +20,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
 
-/**
- * Ensambla los casos de uso del dominio inyectando los adaptadores concretos
- * que implementan los puertos de salida. El dominio (IngestTransactionService,
- * ScoringEngineService, OpenFraudCaseService) no tiene anotaciones de Spring;
- * este es el único punto donde se conecta con el contenedor de inyección de
- * dependencias.
- */
 @Configuration
 public class UseCaseConfig {
 
@@ -41,11 +34,6 @@ public class UseCaseConfig {
         return new GetTransactionService(transactionRepositoryPort);
     }
 
-    /**
-     * Invocado EXCLUSIVAMENTE por
-     * {@code infrastructure.adapter.inbound.messaging.TransactionEventConsumer}
-     * (ver el javadoc de {@link ScoreTransactionUseCase}) — nunca por el controller.
-     */
     @Bean
     public ScoreTransactionUseCase scoreTransactionUseCase(TransactionRepositoryPort transactionRepositoryPort,
                                                             FraudCaseQueuePort fraudCaseQueuePort,

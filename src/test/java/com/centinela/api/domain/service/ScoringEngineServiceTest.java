@@ -24,11 +24,6 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Verifica el ensamblaje del motor de scoring (suma de reglas + publicación condicional)
- * con dobles de prueba escritos a mano para los puertos de salida -- coherente con el
- * espíritu del dominio hexagonal: nada de Spring/Mockito necesario para probar esta lógica.
- */
 class ScoringEngineServiceTest {
 
     private static Transaction tx(String id, long amountCents, Instant ts, double lat, double lon,
@@ -59,7 +54,7 @@ class ScoringEngineServiceTest {
 
         TransactionScore score = engine.score(current);
 
-        assertThat(score.totalScore()).isEqualTo(50); // solo comercio de riesgo
+        assertThat(score.totalScore()).isEqualTo(50);
         assertThat(fraudCaseQueue.published).hasSize(1);
         assertThat(fraudCaseQueue.published.get(0).score()).isEqualTo(50);
         assertThat(repository.savedScores).hasSize(1);
@@ -87,7 +82,7 @@ class ScoringEngineServiceTest {
     void elUmbralSeConsultaEnCadaEvaluacion() {
         InMemoryTransactionRepository repository = new InMemoryTransactionRepository();
         RecordingFraudCaseQueue fraudCaseQueue = new RecordingFraudCaseQueue();
-        int[] threshold = {100}; // por encima del score posible: no debería publicar
+        int[] threshold = {100};
         ScoringEngineService engine = new ScoringEngineService(
                 repository, fraudCaseQueue, () -> threshold[0], defaultRules(), 50);
 
@@ -98,12 +93,11 @@ class ScoringEngineServiceTest {
         engine.score(current);
         assertThat(fraudCaseQueue.published).isEmpty();
 
-        threshold[0] = 10; // "cambia en Key Vault" sin reiniciar nada
+        threshold[0] = 10;
         engine.score(current);
         assertThat(fraudCaseQueue.published).hasSize(1);
     }
 
-    /** Doble de prueba mínimo de {@link TransactionRepositoryPort}. */
     private static class InMemoryTransactionRepository implements TransactionRepositoryPort {
         private final List<Transaction> stored = new ArrayList<>();
         private final List<TransactionScore> savedScores = new ArrayList<>();

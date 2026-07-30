@@ -11,11 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Regla de VELOCIDAD: cuenta cuántas transacciones de la misma cuenta cayeron
- * dentro de una ventana temporal corta que termina en la transacción actual.
- * Se activa cuando esa cantidad alcanza o supera {@code maxTransactionsInWindow}.
- */
 public class VelocityRule implements FraudRule {
 
     private final Duration window;
@@ -35,7 +30,6 @@ public class VelocityRule implements FraudRule {
         long countInWindow = recentHistory.stream()
                 .filter(t -> !t.transactionTimestamp().isBefore(windowStart))
                 .count();
-        // La transacción actual también cuenta como parte de la ventana.
         long totalInWindow = countInWindow + 1;
 
         if (totalInWindow < maxTransactionsInWindow) {

@@ -9,12 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Regla de MONTO ATÍPICO: compara el monto de la transacción actual contra el
- * promedio histórico de la cuenta. Requiere una muestra mínima de transacciones
- * previas ({@code minSampleSize}) para no disparar falsos positivos sobre
- * cuentas nuevas sin historial suficiente para establecer una línea base.
- */
 public class AnomalousAmountRule implements FraudRule {
 
     private final int minSampleSize;

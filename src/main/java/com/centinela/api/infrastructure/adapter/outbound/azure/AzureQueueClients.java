@@ -11,28 +11,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 
-/**
- * Punto único de acceso a los clientes de Azure Storage Queue usados por este
- * proyecto: {@code transaction-events} (distribución de eventos, sin garantía
- * de procesamiento) y {@code fraud-cases} (cola de casos marcados, con garantía
- * de no pérdida mientras el consumidor no confirme el procesamiento borrando el
- * mensaje). Ver docs/decisions/002-semana2-scoring-mensajeria-y-casos.md para la
- * diferencia funcional entre ambas.
- *
- * <p><b>Autenticación:</b> siempre vía {@link DefaultAzureCredentialBuilder}
- * (Managed Identity en Azure, o credenciales de desarrollador local vía
- * {@code az login}/variables AZURE_* estándar) — nunca una connection string ni
- * una clave de cuenta hardcodeada, igual que el resto del proyecto.
- *
- * <p><b>Degradación sin infraestructura real (paridad con Cosmos DB, ver
- * application.properties):</b> si {@code azure.queue.endpoint} no está configurado
- * (placeholder vacío, igual que {@code AZURE_COSMOS_ENDPOINT} en la Semana 1) o la
- * conexión falla al arrancar, este componente NO lanza excepción: registra un log
- * de advertencia y expone los clientes como {@link Optional#empty()}. Los
- * adaptadores que dependen de esta clase (productores y consumidores) deben
- * revisar ese Optional y degradar a un no-op logueado, para que `mvn compile`
- * Y el arranque de la aplicación sigan funcionando sin una cuenta de Storage real.
- */
 @Component
 public class AzureQueueClients {
 

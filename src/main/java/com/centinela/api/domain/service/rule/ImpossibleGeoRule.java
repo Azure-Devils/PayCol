@@ -11,13 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Regla de GEO-IMPOSIBLE: toma la transacción inmediatamente anterior de la
- * cuenta y calcula la velocidad implícita (distancia / tiempo) necesaria para
- * que ambas ubicaciones sean reales. Si esa velocidad supera un umbral
- * físicamente imposible de alcanzar por medios de transporte comunes
- * (por defecto, más rápido que un vuelo comercial), se activa la regla.
- */
 public class ImpossibleGeoRule implements FraudRule {
 
     private final double maxPlausibleSpeedKmh;
@@ -44,7 +37,7 @@ public class ImpossibleGeoRule implements FraudRule {
                 current.location().latitude(), current.location().longitude());
 
         Duration elapsed = Duration.between(prev.transactionTimestamp(), current.transactionTimestamp());
-        double elapsedHours = Math.max(elapsed.toSeconds() / 3600.0, 1.0 / 3600.0); // evita división por cero
+        double elapsedHours = Math.max(elapsed.toSeconds() / 3600.0, 1.0 / 3600.0);
 
         double impliedSpeedKmh = distanceKm / elapsedHours;
 

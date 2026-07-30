@@ -17,29 +17,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 
-/**
- * Adaptador de entrada que hace polling de la cola {@code fraud-cases} y abre el
- * caso correspondiente en el almacén de casos (Cosmos DB, container {@code cases} —
- * ver {@code CosmosFraudCaseRepositoryAdapter} y
- * docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md).
- *
- * <p><b>Garantía de no pérdida (requisito central de esta cola, sección 2.4 del
- * TDD):</b> el mensaje SOLO se borra de la cola después de que
- * {@link OpenFraudCaseUseCase#openCase(FraudCaseEvent)} retorna con éxito (es
- * decir, después de que el caso quedó persistido en Cosmos DB). Si este proceso
- * está caído, los mensajes simplemente se acumulan en la cola — Azure Storage
- * Queue los retiene hasta 7 días por defecto — y se procesan todos, sin pérdidas,
- * en cuanto el consumidor se restablece. Esto es exactamente lo que pide el
- * "Requerimiento de validación" de la sección 2.4: detener este componente no debe
- * afectar la ingesta (que sigue publicando en otra cola, {@code transaction-events},
- * de forma independiente) ni perder casos.
- */
 @Component
 public class FraudCaseQueueConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(FraudCaseQueueConsumer.class);
-    private static final long MAX_DEQUEUE_COUNT = 10; // más tolerante que transaction-events:
-                                                       // perder un caso es más grave que perder un score.
+    private static final long MAX_DEQUEUE_COUNT = 10;
 
     private final AzureQueueClients queues;
     private final OpenFraudCaseUseCase openFraudCaseUseCase;
@@ -63,7 +45,7 @@ public class FraudCaseQueueConsumer {
     public void poll() {
         var maybeClient = queues.fraudCases();
         if (maybeClient.isEmpty()) {
-            return; // cola no configurada todavía (ver AzureQueueClients).
+            return;
         }
         QueueClient client = maybeClient.get();
         try {
@@ -78,7 +60,6 @@ public class FraudCaseQueueConsumer {
         try {
             FraudCaseEvent event = decode(message);
             openFraudCaseUseCase.openCase(event);
-            // Solo se borra tras persistir con éxito: es la garantía de no pérdida de esta cola.
             client.deleteMessage(message.getMessageId(), message.getPopReceipt());
         } catch (Exception e) {
             if (message.getDequeueCount() > MAX_DEQUEUE_COUNT) {

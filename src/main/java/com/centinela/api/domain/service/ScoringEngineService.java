@@ -13,21 +13,6 @@ import com.centinela.api.domain.service.rule.FraudRule;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * Motor de scoring (sección 2.3 del TDD de Semana 2). Lógica de dominio pura:
- * no importa Spring ni el SDK de Azure. Quien lo invoca (un adaptador de
- * mensajería asíncrono, nunca el controller) es responsabilidad de
- * infrastructure — ver el javadoc de {@link ScoreTransactionUseCase}.
- *
- * Secuencia (idéntica a la del doc):
- *  1. Recibe la transacción ya persistida (se la pasa el llamador).
- *  2. Consulta el historial reciente de la cuenta, SOLO por partition key
- *     ({@code customerId}) — ver {@link TransactionRepositoryPort#findMostRecentByCustomer}.
- *  3. Evalúa las cuatro reglas.
- *  4. Suma los puntos de las reglas activadas.
- *  5. Persiste el score y el detalle junto a la transacción.
- *  6. Si el score supera el umbral vigente, publica un mensaje de apertura de caso.
- */
 public class ScoringEngineService implements ScoreTransactionUseCase {
 
     private final TransactionRepositoryPort transactionRepository;
@@ -50,16 +35,12 @@ public class ScoringEngineService implements ScoreTransactionUseCase {
 
     @Override
     public TransactionScore score(Transaction transaction) {
-        // Paso 2: SOLO por partition key (customerId). Acotado a historyLimit
-        // transacciones para mantener el consumo de RU predecible sin importar
-        // la antigüedad de la cuenta (ver docs/decisions).
         List<Transaction> history = transactionRepository
                 .findMostRecentByCustomer(transaction.customerId(), historyLimit)
                 .stream()
                 .filter(t -> !t.transactionId().equals(transaction.transactionId()))
                 .toList();
 
-        // Pasos 3 y 4.
         List<RuleActivation> activations = rules.stream()
                 .map(rule -> rule.evaluate(transaction, history))
                 .flatMap(java.util.Optional::stream)
@@ -75,12 +56,8 @@ public class ScoringEngineService implements ScoreTransactionUseCase {
                 Instant.now()
         );
 
-        // Paso 5.
         transactionRepository.saveScore(score);
 
-        // Paso 6: el umbral se lee en el momento de evaluar, nunca cacheado
-        // (ver ScoringThresholdPort), para que un cambio en Key Vault se
-        // refleje sin redespliegue.
         int threshold = thresholdPort.currentThreshold();
         if (totalScore >= threshold) {
             fraudCaseQueue.publishCaseOpened(new FraudCaseEvent(

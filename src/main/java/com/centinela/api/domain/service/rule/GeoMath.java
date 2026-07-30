@@ -2,11 +2,6 @@ package com.centinela.api.domain.service.rule;
 
 import java.math.BigDecimal;
 
-/**
- * Utilidad de distancia geográfica (fórmula de Haversine), usada por
- * {@link ImpossibleGeoRule}. Aislada en su propia clase para poder testearla
- * sin necesidad de construir una {@code Transaction} completa.
- */
 final class GeoMath {
 
     private static final double EARTH_RADIUS_KM = 6371.0;
@@ -14,7 +9,6 @@ final class GeoMath {
     private GeoMath() {
     }
 
-    /** Distancia en kilómetros entre dos coordenadas (línea recta sobre la esfera terrestre). */
     static double distanceKm(BigDecimal lat1, BigDecimal lon1, BigDecimal lat2, BigDecimal lon2) {
         double phi1 = Math.toRadians(lat1.doubleValue());
         double phi2 = Math.toRadians(lat2.doubleValue());

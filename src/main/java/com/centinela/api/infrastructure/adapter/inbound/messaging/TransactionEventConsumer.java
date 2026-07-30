@@ -17,34 +17,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Base64;
 
-/**
- * Adaptador de ENTRADA (sí, aunque viva bajo {@code infrastructure}, es un
- * "driving adapter" en términos hexagonales: reacciona a un evento externo e
- * invoca un caso de uso del dominio) que hace polling de la cola
- * {@code transaction-events} y activa el motor de scoring por cada mensaje.
- *
- * <p><b>Esto es, a propósito, el ÚNICO llamador de {@link ScoreTransactionUseCase}
- * en todo el proyecto.</b> El controller de ingesta ({@code TransactionController})
- * jamás lo invoca — ver el javadoc de {@link ScoreTransactionUseCase} para la
- * razón (es el error de diseño más frecuente de la Semana 2 según el TDD).
- *
- * <p><b>Decisión de arquitectura — "serverless" implementado in-process:</b> el
- * TDD describe el motor de scoring como un "componente serverless activado por
- * el evento". Este proyecto es una única app Spring Boot (no hay Azure Functions
- * Java desplegado por separado), así que la activación por evento se implementa
- * como este poller programado ({@code @Scheduled}) dentro del mismo proceso, en
- * vez de una Azure Function real. Cumple igual el requisito central de
- * desacoplamiento (la API nunca invoca ni espera este componente) con una
- * complejidad de infraestructura muchísimo menor, adecuada al alcance de un
- * proyecto estudiantil — ver la justificación completa en
- * docs/decisions/002-semana2-scoring-mensajeria-y-casos.md.
- *
- * <p><b>Manejo de fallos:</b> si el scoring de un mensaje falla, el mensaje NO se
- * borra — Azure Storage Queue lo vuelve a hacer visible automáticamente tras el
- * "visibility timeout" para reintentarlo. Para evitar reintentos infinitos ante un
- * mensaje "envenenado" (payload corrupto, bug determinístico), se descarta tras
- * {@code MAX_DEQUEUE_COUNT} intentos, dejando constancia en el log de error.
- */
 @Component
 public class TransactionEventConsumer {
 
@@ -73,7 +45,7 @@ public class TransactionEventConsumer {
     public void poll() {
         var maybeClient = queues.transactionEvents();
         if (maybeClient.isEmpty()) {
-            return; // cola no configurada (ver AzureQueueClients); nada que consumir todavía.
+            return;
         }
         QueueClient client = maybeClient.get();
         try {

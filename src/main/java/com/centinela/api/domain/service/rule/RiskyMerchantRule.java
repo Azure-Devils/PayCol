@@ -10,11 +10,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Regla de COMERCIO DE RIESGO: la transacción actual se dirige a un comercio o
- * categoría de comercio (MCC) presente en una lista de entidades marcadas.
- * No necesita historial: evalúa solo la transacción actual.
- */
 public class RiskyMerchantRule implements FraudRule {
 
     private final Set<String> riskyMerchantIds;

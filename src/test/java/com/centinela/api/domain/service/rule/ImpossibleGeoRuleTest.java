@@ -17,7 +17,6 @@ class ImpossibleGeoRuleTest {
 
     @Test
     void seActivaCuandoLaVelocidadImplicitaEsFisicamenteImposible() {
-        // Bogotá -> Tokio (~14.700 km) en 10 minutos: imposible por cualquier medio real.
         Instant t1 = Instant.parse("2026-07-24T10:00:00Z");
         Instant t2 = t1.plusSeconds(600);
 
@@ -34,7 +33,7 @@ class ImpossibleGeoRuleTest {
     @Test
     void noSeActivaConUnDesplazamientoPlausible() {
         Instant t1 = Instant.parse("2026-07-24T10:00:00Z");
-        Instant t2 = t1.plusSeconds(3600); // 1 hora después, unos km de diferencia
+        Instant t2 = t1.plusSeconds(3600);
 
         Transaction previous = tx("prev", "acc1", 1000, t1, 4.710989, -74.072092, "m1", "5411");
         Transaction current = tx("cur", "acc1", 1000, t2, 4.720989, -74.082092, "m1", "5411");

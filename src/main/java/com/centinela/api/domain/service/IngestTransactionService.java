@@ -9,17 +9,6 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
-/**
- * Implementación del caso de uso de ingesta. Lógica de dominio pura:
- * no importa Spring ni el SDK de Azure.
- *
- * Responsabilidades (sección 4 del TDD):
- *  - Validar el contrato de negocio.
- *  - Capturar el timestamp de servidor (ingestion_timestamp) ignorando
- *    cualquier valor que pudiera venir del cliente para ese campo.
- *  - Garantizar idempotencia: si el transaction_id ya fue ingerido, no se
- *    duplica ni se genera un nuevo id.
- */
 public class IngestTransactionService implements IngestTransactionUseCase {
 
     private final TransactionRepositoryPort transactionRepository;
@@ -37,7 +26,6 @@ public class IngestTransactionService implements IngestTransactionUseCase {
 
         Optional<Transaction> existing = transactionRepository.findById(transaction.transactionId());
         if (existing.isPresent()) {
-            // Idempotencia: la misma transaction_id ya fue procesada, no se re-inserta.
             return existing.get();
         }
 

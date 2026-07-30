@@ -10,14 +10,6 @@ import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 
-/**
- * Contrato de entrada de la API de ingesta. Cualquier campo no declarado aquí
- * hace que Jackson lance UnrecognizedPropertyException (fail-on-unknown-properties=true),
- * interceptada por GlobalExceptionHandler -> 422.
- *
- * Nótese que NO se acepta ingestion_timestamp desde el cliente: lo captura
- * siempre el servidor (sección 4 del TDD).
- */
 public record TransactionRequestDto(
         @NotBlank @Size(max = 100) String transactionId,
         @NotBlank @Size(max = 50) String customerId,

@@ -11,24 +11,6 @@ import org.springframework.stereotype.Component;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
-/**
- * Adaptador real de {@link MessageQueuePort} sobre Azure Storage Queue. Reemplaza al
- * antiguo {@code NoOpMessageQueueAdapter} de la Semana 1.
- *
- * <p><b>Distribución del evento de transacción, no garantía de procesamiento.</b>
- * Este mecanismo solo NOTIFICA al motor de scoring que hay una transacción nueva;
- * si nadie la consume nunca, no pasa nada grave (el peor caso es que esa
- * transacción puntual no se puntúa) — por eso alcanza con Azure Storage Queue en
- * vez de un mecanismo con reintentos/DLQ más sofisticado. Contraste con
- * {@link AzureFraudCaseQueueAdapter}, que sí requiere esa garantía. Ver
- * docs/decisions/002-semana2-scoring-mensajeria-y-casos.md.
- *
- * <p><b>No bloquea más de lo necesario (sección 2.5 del TDD):</b> {@code sendMessage}
- * es una única llamada HTTP síncrona al Storage Queue — se espera su confirmación
- * (para no perder el evento silenciosamente), pero en ningún momento se espera al
- * motor de scoring, que corre en otro proceso lógico (el consumidor, ver
- * {@code infrastructure.adapter.inbound.messaging.TransactionEventConsumer}).
- */
 @Component
 public class AzureQueueMessageQueueAdapter implements MessageQueuePort {
 
@@ -54,8 +36,6 @@ public class AzureQueueMessageQueueAdapter implements MessageQueuePort {
 
         try {
             String json = objectMapper.writeValueAsString(transaction);
-            // Azure Storage Queue transporta el mensaje como texto/XML; Base64 evita problemas
-            // con caracteres especiales del JSON (es la práctica recomendada por el SDK).
             String encoded = Base64.getEncoder().encodeToString(json.getBytes(StandardCharsets.UTF_8));
             client.get().sendMessage(encoded);
         } catch (JsonProcessingException e) {

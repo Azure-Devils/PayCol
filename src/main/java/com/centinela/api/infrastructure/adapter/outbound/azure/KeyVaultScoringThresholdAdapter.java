@@ -9,29 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/**
- * Implementa {@link ScoringThresholdPort} leyendo el umbral de score directamente
- * de Azure Key Vault en CADA evaluación (nunca cacheado), vía
- * {@link DefaultAzureCredentialBuilder} (Managed Identity) — sin credencial
- * destinada a obtener credenciales, sin secretos en el código ni en el repo.
- *
- * <p>Se decidió consultar el {@link SecretClient} directamente en vez de depender
- * de {@code spring-cloud-azure-starter-keyvault-secrets} como property source: esa
- * librería no expone (en la versión usada, 5.20.1) un intervalo de refresco
- * automático fuera de la integración con Spring Cloud Config/Actuator refresh, lo
- * cual habría dejado el valor efectivamente cacheado hasta un refresh manual —
- * justo lo que el requisito prohíbe ("su modificación no puede requerir un nuevo
- * despliegue"). Consultar el secreto en cada llamada es más simple, más explícito,
- * y cuesta una sola operación de lectura de Key Vault por transacción puntuada
- * (el free tier de Key Vault permite ~10.000 operaciones/mes sin costo, más que
- * suficiente para el volumen de este proyecto).
- *
- * <p><b>Degradación sin Key Vault real:</b> mientras {@code azure.keyvault.endpoint}
- * (env var {@code AZURE_KEYVAULT_ENDPOINT}) esté vacío o el secreto no exista/no sea
- * accesible, se usa el valor de respaldo {@code centinela.scoring.threshold}
- * (application.properties / env var {@code CENTINELA_SCORING_THRESHOLD}) — mismo
- * patrón de placeholders vacíos ya usado para Cosmos y Storage Queue.
- */
 @Component
 public class KeyVaultScoringThresholdAdapter implements ScoringThresholdPort {
 
@@ -76,8 +53,6 @@ public class KeyVaultScoringThresholdAdapter implements ScoringThresholdPort {
             return fallbackThreshold;
         }
         try {
-            // Sin caché: se lee Key Vault en cada evaluación del motor de scoring, para que
-            // un cambio de secreto se refleje de inmediato, sin redespliegue ni reinicio.
             String raw = secretClient.getSecret(secretName).getValue();
             return Integer.parseInt(raw.trim());
         } catch (Exception e) {

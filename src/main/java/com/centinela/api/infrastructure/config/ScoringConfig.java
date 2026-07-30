@@ -15,17 +15,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/**
- * Ensambla las cuatro reglas de detección de fraude (sección 2.3 del TDD de
- * Semana 2) con sus parámetros configurables vía {@code application.properties}
- * (no requieren Key Vault: a diferencia del umbral total de score, estos
- * parámetros no forman parte del requisito "modificable sin redespliegue" del
- * doc — solo el umbral final lo es, ver {@code ScoringThresholdPort}).
- *
- * Cada regla es una clase de dominio pura (sin Spring); este es el único punto
- * donde se conectan con el contenedor de inyección de dependencias, igual que
- * {@link UseCaseConfig}.
- */
 @Configuration
 public class ScoringConfig {
 
