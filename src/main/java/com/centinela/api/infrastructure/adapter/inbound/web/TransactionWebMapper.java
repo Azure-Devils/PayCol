@@ -2,6 +2,7 @@ package com.centinela.api.infrastructure.adapter.inbound.web;
 
 import com.centinela.api.domain.model.Location;
 import com.centinela.api.domain.model.Transaction;
+import com.centinela.api.domain.model.TransactionReviewStatus;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -27,7 +28,7 @@ public class TransactionWebMapper {
         );
     }
 
-    public TransactionResponseDto toResponse(Transaction transaction) {
+    public TransactionResponseDto toResponse(Transaction transaction, TransactionReviewStatus status) {
         LocationResponseDto locationDto = new LocationResponseDto(
                 transaction.location().locationId(),
                 transaction.location().latitude(),
@@ -43,7 +44,8 @@ public class TransactionWebMapper {
                 transaction.ingestionTimestamp(),
                 locationDto,
                 transaction.merchantId(),
-                transaction.merchantCategory()
+                transaction.merchantCategory(),
+                status
         );
     }
 }

@@ -2,6 +2,7 @@ package com.centinela.api.infrastructure.adapter.inbound.web;
 
 import com.centinela.api.domain.model.Transaction;
 import com.centinela.api.domain.port.inbound.GetTransactionReceiptUseCase;
+import com.centinela.api.domain.port.inbound.GetTransactionReviewStatusUseCase;
 import com.centinela.api.domain.port.inbound.GetTransactionUseCase;
 import com.centinela.api.domain.port.inbound.IngestTransactionUseCase;
 import jakarta.validation.Valid;
@@ -22,28 +23,33 @@ public class TransactionController {
     private final IngestTransactionUseCase ingestTransactionUseCase;
     private final GetTransactionUseCase getTransactionUseCase;
     private final GetTransactionReceiptUseCase getTransactionReceiptUseCase;
+    private final GetTransactionReviewStatusUseCase getTransactionReviewStatusUseCase;
     private final TransactionWebMapper mapper;
 
     public TransactionController(IngestTransactionUseCase ingestTransactionUseCase,
                                   GetTransactionUseCase getTransactionUseCase,
                                   GetTransactionReceiptUseCase getTransactionReceiptUseCase,
+                                  GetTransactionReviewStatusUseCase getTransactionReviewStatusUseCase,
                                   TransactionWebMapper mapper) {
         this.ingestTransactionUseCase = ingestTransactionUseCase;
         this.getTransactionUseCase = getTransactionUseCase;
         this.getTransactionReceiptUseCase = getTransactionReceiptUseCase;
+        this.getTransactionReviewStatusUseCase = getTransactionReviewStatusUseCase;
         this.mapper = mapper;
     }
 
     @PostMapping
     public ResponseEntity<TransactionResponseDto> ingest(@Valid @RequestBody TransactionRequestDto request) {
         Transaction ingested = ingestTransactionUseCase.ingest(mapper.toDomain(request));
-        return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(ingested));
+        var status = getTransactionReviewStatusUseCase.getStatus(ingested.transactionId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(ingested, status));
     }
 
     @GetMapping("/{transactionId}")
     public ResponseEntity<TransactionResponseDto> getById(@PathVariable String transactionId) {
         return getTransactionUseCase.getById(transactionId)
-                .map(mapper::toResponse)
+                .map(transaction -> mapper.toResponse(
+                        transaction, getTransactionReviewStatusUseCase.getStatus(transactionId)))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
