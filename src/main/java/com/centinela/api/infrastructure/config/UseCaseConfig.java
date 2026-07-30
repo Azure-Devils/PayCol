@@ -1,6 +1,7 @@
 package com.centinela.api.infrastructure.config;
 
 import com.centinela.api.domain.port.inbound.GetTransactionReceiptUseCase;
+import com.centinela.api.domain.port.inbound.GetTransactionReviewStatusUseCase;
 import com.centinela.api.domain.port.inbound.GetTransactionUseCase;
 import com.centinela.api.domain.port.inbound.IngestTransactionUseCase;
 import com.centinela.api.domain.port.inbound.OpenFraudCaseUseCase;
@@ -12,6 +13,7 @@ import com.centinela.api.domain.port.outbound.ScoringThresholdPort;
 import com.centinela.api.domain.port.outbound.TransactionReceiptStoragePort;
 import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
 import com.centinela.api.domain.service.GetTransactionReceiptService;
+import com.centinela.api.domain.service.GetTransactionReviewStatusService;
 import com.centinela.api.domain.service.GetTransactionService;
 import com.centinela.api.domain.service.IngestTransactionService;
 import com.centinela.api.domain.service.OpenFraudCaseService;
@@ -65,5 +67,11 @@ public class UseCaseConfig {
     @Bean
     public OpenFraudCaseUseCase openFraudCaseUseCase(FraudCaseRepositoryPort fraudCaseRepositoryPort) {
         return new OpenFraudCaseService(fraudCaseRepositoryPort);
+    }
+
+    @Bean
+    public GetTransactionReviewStatusUseCase getTransactionReviewStatusUseCase(
+            FraudCaseRepositoryPort fraudCaseRepositoryPort, TransactionRepositoryPort transactionRepositoryPort) {
+        return new GetTransactionReviewStatusService(fraudCaseRepositoryPort, transactionRepositoryPort);
     }
 }

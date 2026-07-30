@@ -101,6 +101,11 @@ class IngestTransactionServiceTest {
         @Override
         public void saveScore(TransactionScore score) {
         }
+
+        @Override
+        public Optional<TransactionScore> findScore(String transactionId) {
+            return Optional.empty();
+        }
     }
 
     private static class RecordingMessageQueue implements MessageQueuePort {

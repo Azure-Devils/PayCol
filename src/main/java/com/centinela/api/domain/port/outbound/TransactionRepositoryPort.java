@@ -15,4 +15,6 @@ public interface TransactionRepositoryPort {
     List<Transaction> findMostRecentByCustomer(String customerId, int limit);
 
     void saveScore(TransactionScore score);
+
+    Optional<TransactionScore> findScore(String transactionId);
 }

@@ -130,6 +130,13 @@ class ScoringEngineServiceTest {
         public void saveScore(TransactionScore score) {
             savedScores.add(score);
         }
+
+        @Override
+        public Optional<TransactionScore> findScore(String transactionId) {
+            return savedScores.stream()
+                    .filter(score -> score.transactionId().equals(transactionId))
+                    .findFirst();
+        }
     }
 
     private static class RecordingFraudCaseQueue implements FraudCaseQueuePort {

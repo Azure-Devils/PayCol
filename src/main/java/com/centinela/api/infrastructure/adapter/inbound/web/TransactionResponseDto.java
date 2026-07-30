@@ -1,5 +1,7 @@
 package com.centinela.api.infrastructure.adapter.inbound.web;
 
+import com.centinela.api.domain.model.TransactionReviewStatus;
+
 import java.time.Instant;
 
 public record TransactionResponseDto(
@@ -11,6 +13,7 @@ public record TransactionResponseDto(
         Instant ingestionTimestamp,
         LocationResponseDto location,
         String merchantId,
-        String merchantCategory
+        String merchantCategory,
+        TransactionReviewStatus status
 ) {
 }

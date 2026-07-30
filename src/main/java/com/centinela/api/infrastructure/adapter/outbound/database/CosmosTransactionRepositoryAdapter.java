@@ -4,6 +4,7 @@ import com.azure.cosmos.models.PartitionKey;
 import com.centinela.api.domain.model.Customer;
 import com.centinela.api.domain.model.Location;
 import com.centinela.api.domain.model.RuleActivation;
+import com.centinela.api.domain.model.ScoringRule;
 import com.centinela.api.domain.model.Transaction;
 import com.centinela.api.domain.model.TransactionScore;
 import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
@@ -98,9 +99,32 @@ public class CosmosTransactionRepositoryAdapter implements TransactionRepository
         cosmosTransactionRepository.save(document);
     }
 
+    @Override
+    public Optional<TransactionScore> findScore(String transactionId) {
+        return cosmosTransactionRepository.findById(transactionId)
+                .filter(document -> document.getScore() != null)
+                .map(this::toScore);
+    }
+
     private CosmosTransactionDocument.RuleActivationEmbedded toEmbedded(RuleActivation activation) {
         return new CosmosTransactionDocument.RuleActivationEmbedded(
                 activation.rule().name(), activation.points(), activation.observedValues());
+    }
+
+    private TransactionScore toScore(CosmosTransactionDocument document) {
+        List<RuleActivation> activations = document.getRuleActivations().stream()
+                .map(embedded -> new RuleActivation(
+                        ScoringRule.valueOf(embedded.getRuleId()),
+                        embedded.getPoints(),
+                        embedded.getObservedValues()))
+                .toList();
+
+        return new TransactionScore(
+                document.getId(),
+                document.getCustomerId(),
+                document.getScore(),
+                activations,
+                document.getScoredAt().toInstant());
     }
 
     private Transaction toDomain(CosmosTransactionDocument document) {
