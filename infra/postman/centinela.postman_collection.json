@@ -289,6 +289,227 @@
           "path": ["api", "v1", "transactions", "postman-no-existe-000", "receipt"]
         }
       }
+    },
+    {
+      "name": "12 - POST transactionId faltante (422, @NotBlank)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 422', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('fieldErrors incluye transactionId', () => pm.expect(body.fieldErrors).to.have.property('transactionId'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerId\": \"cust-postman-06\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-06\",\n  \"merchantCategory\": \"5411\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+      }
+    },
+    {
+      "name": "13 - POST amountCents = 0 (422, limite exacto de @Positive)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 422', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('fieldErrors incluye amountCents', () => pm.expect(body.fieldErrors).to.have.property('amountCents'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"postman-zeroamount-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-07\",\n  \"amountCents\": 0,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-07\",\n  \"merchantCategory\": \"5411\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+      }
+    },
+    {
+      "name": "14 - POST sin location (422, @NotNull)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 422', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('fieldErrors incluye location', () => pm.expect(body.fieldErrors).to.have.property('location'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"postman-nolocation-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-08\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"merchantId\": \"merch-postman-08\",\n  \"merchantCategory\": \"5411\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+      }
+    },
+    {
+      "name": "15 - POST longitude fuera de rango (422)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 422', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('fieldErrors incluye location.longitude', () => pm.expect(body.fieldErrors).to.have.property('location.longitude'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"postman-badlong-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-09\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -200 },\n  \"merchantId\": \"merch-postman-09\",\n  \"merchantCategory\": \"5411\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+      }
+    },
+    {
+      "name": "16 - POST intento de inyectar ingestionTimestamp (422, anti-polucion documentada)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 422', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('mensaje menciona ingestionTimestamp', () => pm.expect(body.message).to.include('ingestionTimestamp'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"postman-fakeingestion-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-10\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"ingestionTimestamp\": \"2020-01-01T00:00:00Z\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-10\",\n  \"merchantCategory\": \"5411\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+      }
+    },
+    {
+      "name": "17 - POST merchantCategory demasiado larga (422, @Size max 10)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 422', () => pm.response.to.have.status(422));",
+              "const body = pm.response.json();",
+              "pm.test('fieldErrors incluye merchantCategory', () => pm.expect(body.fieldErrors).to.have.property('merchantCategory'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"postman-longcat-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-11\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-11\",\n  \"merchantCategory\": \"esto-tiene-mas-de-diez-caracteres\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+      }
+    },
+    {
+      "name": "18 - POST Content-Type incorrecto (415 Unsupported Media Type)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 415', () => pm.response.to.have.status(415));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "text/plain" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"postman-wrongctype-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-12\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-12\",\n  \"merchantCategory\": \"5411\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+      }
+    },
+    {
+      "name": "19 - OPTIONS preflight CORS (verifica que el navegador no bloquearia la llamada)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Access-Control-Allow-Origin presente', () => pm.expect(pm.response.headers.has('Access-Control-Allow-Origin')).to.be.true);",
+              "pm.test('Access-Control-Allow-Methods incluye POST', () => pm.expect(pm.response.headers.get('Access-Control-Allow-Methods')).to.include('POST'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "OPTIONS",
+        "header": [
+          { "key": "Origin", "value": "https://frontend-de-prueba.example" },
+          { "key": "Access-Control-Request-Method", "value": "POST" },
+          { "key": "Access-Control-Request-Headers", "value": "Content-Type" }
+        ],
+        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+      }
+    },
+    {
+      "name": "20 - POST valida confirma header X-RateLimit-Remaining",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('status 201', () => pm.response.to.have.status(201));",
+              "pm.test('header X-RateLimit-Remaining presente (confirma que el filtro esta activo)', () => pm.expect(pm.response.headers.has('X-RateLimit-Remaining')).to.be.true);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transactionId\": \"postman-ratelimitcheck-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-13\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-13\",\n  \"merchantCategory\": \"5411\"\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+      }
     }
   ]
 }
