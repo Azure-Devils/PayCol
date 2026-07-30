@@ -1,8 +1,12 @@
 package com.centinela.api.domain.service;
 
+import com.centinela.api.domain.model.IngestionResult;
+import com.centinela.api.domain.model.ReceiptPhoto;
+import com.centinela.api.domain.model.ReceiptPhotoUpload;
 import com.centinela.api.domain.model.Transaction;
 import com.centinela.api.domain.port.inbound.IngestTransactionUseCase;
 import com.centinela.api.domain.port.outbound.MessageQueuePort;
+import com.centinela.api.domain.port.outbound.ReceiptPhotoStoragePort;
 import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
 import com.centinela.api.domain.port.outbound.TransactionReceiptStoragePort;
 import org.slf4j.Logger;
@@ -20,31 +24,62 @@ public class IngestTransactionService implements IngestTransactionUseCase {
     private final MessageQueuePort messageQueue;
     private final TransactionReceiptGenerator receiptGenerator;
     private final TransactionReceiptStoragePort receiptStorage;
+    private final ReceiptPhotoDecoder receiptPhotoDecoder;
+    private final ReceiptPhotoStoragePort receiptPhotoStorage;
 
     public IngestTransactionService(TransactionRepositoryPort transactionRepository,
                                      MessageQueuePort messageQueue,
                                      TransactionReceiptGenerator receiptGenerator,
-                                     TransactionReceiptStoragePort receiptStorage) {
+                                     TransactionReceiptStoragePort receiptStorage,
+                                     ReceiptPhotoDecoder receiptPhotoDecoder,
+                                     ReceiptPhotoStoragePort receiptPhotoStorage) {
         this.transactionRepository = transactionRepository;
         this.messageQueue = messageQueue;
         this.receiptGenerator = receiptGenerator;
         this.receiptStorage = receiptStorage;
+        this.receiptPhotoDecoder = receiptPhotoDecoder;
+        this.receiptPhotoStorage = receiptPhotoStorage;
     }
 
     @Override
-    public Transaction ingest(Transaction transaction) {
+    public IngestionResult ingest(Transaction transaction, ReceiptPhotoUpload photoUpload) {
         validate(transaction);
 
         Optional<Transaction> existing = transactionRepository.findById(transaction.transactionId());
         if (existing.isPresent()) {
-            return existing.get();
+            return new IngestionResult(existing.get(), false);
         }
+
+        ReceiptPhoto receiptPhoto = decodePhotoIfPresent(photoUpload);
 
         Transaction withServerTimestamp = transaction.withIngestionTimestamp(Instant.now());
         Transaction persisted = transactionRepository.save(withServerTimestamp);
         messageQueue.publish(persisted);
         generateAndStoreReceipt(persisted);
-        return persisted;
+        boolean receiptUploaded = storeReceiptPhoto(persisted, receiptPhoto);
+
+        return new IngestionResult(persisted, receiptUploaded);
+    }
+
+    private ReceiptPhoto decodePhotoIfPresent(ReceiptPhotoUpload photoUpload) {
+        if (photoUpload == null || photoUpload.photo() == null || photoUpload.photo().isBlank()) {
+            return null;
+        }
+        return receiptPhotoDecoder.decode(photoUpload.photo());
+    }
+
+    private boolean storeReceiptPhoto(Transaction transaction, ReceiptPhoto receiptPhoto) {
+        if (receiptPhoto == null) {
+            return false;
+        }
+        try {
+            receiptPhotoStorage.store(transaction.transactionId(), receiptPhoto.content(), receiptPhoto.contentType());
+            return true;
+        } catch (Exception e) {
+            log.error("No se pudo almacenar la foto de comprobante de la transaccion {}: {}",
+                    transaction.transactionId(), e.getMessage(), e);
+            return false;
+        }
     }
 
     private void generateAndStoreReceipt(Transaction transaction) {

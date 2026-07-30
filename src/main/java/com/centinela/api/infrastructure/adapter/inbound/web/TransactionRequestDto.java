@@ -18,6 +18,8 @@ public record TransactionRequestDto(
         @NotNull @PastOrPresent @JsonFormat(shape = JsonFormat.Shape.STRING) Instant transactionTimestamp,
         @NotNull @Valid LocationRequestDto location,
         @NotBlank @Size(max = 50) String merchantId,
-        @NotBlank @Size(max = 10) String merchantCategory
+        @NotBlank @Size(max = 10) String merchantCategory,
+        @Size(max = 8_000_000) String photo,
+        @Size(max = 255) String photoName
 ) {
 }
