@@ -14,6 +14,7 @@ public record TransactionResponseDto(
         LocationResponseDto location,
         String merchantId,
         String merchantCategory,
-        TransactionReviewStatus status
+        TransactionReviewStatus status,
+        boolean receiptUploaded
 ) {
 }

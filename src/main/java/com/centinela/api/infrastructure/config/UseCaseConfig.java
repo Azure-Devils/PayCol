@@ -9,6 +9,7 @@ import com.centinela.api.domain.port.inbound.ScoreTransactionUseCase;
 import com.centinela.api.domain.port.outbound.FraudCaseQueuePort;
 import com.centinela.api.domain.port.outbound.FraudCaseRepositoryPort;
 import com.centinela.api.domain.port.outbound.MessageQueuePort;
+import com.centinela.api.domain.port.outbound.ReceiptPhotoStoragePort;
 import com.centinela.api.domain.port.outbound.ScoringThresholdPort;
 import com.centinela.api.domain.port.outbound.TransactionReceiptStoragePort;
 import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
@@ -17,6 +18,7 @@ import com.centinela.api.domain.service.GetTransactionReviewStatusService;
 import com.centinela.api.domain.service.GetTransactionService;
 import com.centinela.api.domain.service.IngestTransactionService;
 import com.centinela.api.domain.service.OpenFraudCaseService;
+import com.centinela.api.domain.service.ReceiptPhotoDecoder;
 import com.centinela.api.domain.service.ScoringEngineService;
 import com.centinela.api.domain.service.TransactionReceiptGenerator;
 import com.centinela.api.domain.service.rule.FraudRule;
@@ -35,12 +37,20 @@ public class UseCaseConfig {
     }
 
     @Bean
+    public ReceiptPhotoDecoder receiptPhotoDecoder() {
+        return new ReceiptPhotoDecoder();
+    }
+
+    @Bean
     public IngestTransactionUseCase ingestTransactionUseCase(TransactionRepositoryPort transactionRepositoryPort,
                                                                MessageQueuePort messageQueuePort,
                                                                TransactionReceiptGenerator transactionReceiptGenerator,
-                                                               TransactionReceiptStoragePort transactionReceiptStoragePort) {
+                                                               TransactionReceiptStoragePort transactionReceiptStoragePort,
+                                                               ReceiptPhotoDecoder receiptPhotoDecoder,
+                                                               ReceiptPhotoStoragePort receiptPhotoStoragePort) {
         return new IngestTransactionService(transactionRepositoryPort, messageQueuePort,
-                transactionReceiptGenerator, transactionReceiptStoragePort);
+                transactionReceiptGenerator, transactionReceiptStoragePort,
+                receiptPhotoDecoder, receiptPhotoStoragePort);
     }
 
     @Bean

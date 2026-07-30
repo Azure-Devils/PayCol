@@ -1,6 +1,6 @@
 package com.centinela.api.infrastructure.adapter.inbound.web;
 
-import com.centinela.api.domain.model.Transaction;
+import com.centinela.api.domain.model.IngestionResult;
 import com.centinela.api.domain.port.inbound.GetTransactionReceiptUseCase;
 import com.centinela.api.domain.port.inbound.GetTransactionReviewStatusUseCase;
 import com.centinela.api.domain.port.inbound.GetTransactionUseCase;
@@ -40,9 +40,11 @@ public class TransactionController {
 
     @PostMapping
     public ResponseEntity<TransactionResponseDto> ingest(@Valid @RequestBody TransactionRequestDto request) {
-        Transaction ingested = ingestTransactionUseCase.ingest(mapper.toDomain(request));
-        var status = getTransactionReviewStatusUseCase.getStatus(ingested.transactionId());
-        return ResponseEntity.status(HttpStatus.CREATED).body(mapper.toResponse(ingested, status));
+        IngestionResult result = ingestTransactionUseCase.ingest(
+                mapper.toDomain(request), mapper.toPhotoUpload(request));
+        var status = getTransactionReviewStatusUseCase.getStatus(result.transaction().transactionId());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(mapper.toResponse(result.transaction(), status, result.receiptUploaded()));
     }
 
     @GetMapping("/{transactionId}")
