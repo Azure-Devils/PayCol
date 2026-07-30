@@ -23,6 +23,7 @@
         <!-- BOM que fija versiones compatibles de todos los starters "spring-cloud-azure-*",
              incluido el de Cosmos DB. Ver docs/decisions/001-migracion-postgresql-a-cosmosdb.md -->
         <spring-cloud-azure.version>5.20.1</spring-cloud-azure.version>
+        <pdfbox.version>3.0.8</pdfbox.version>
     </properties>
 
     <dependencyManagement>
@@ -71,6 +72,15 @@
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-storage-queue</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.azure</groupId>
+            <artifactId>azure-storage-blob</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>${pdfbox.version}</version>
         </dependency>
         <!-- Semana 2: umbral de scoring leído directamente de Azure Key Vault en cada
              evaluación (sin caché) — ver KeyVaultScoringThresholdAdapter. Versión gestionada
