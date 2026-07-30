@@ -4,6 +4,9 @@ import com.centinela.api.domain.model.Transaction;
 import com.centinela.api.domain.port.inbound.IngestTransactionUseCase;
 import com.centinela.api.domain.port.outbound.MessageQueuePort;
 import com.centinela.api.domain.port.outbound.TransactionRepositoryPort;
+import com.centinela.api.domain.port.outbound.TransactionReceiptStoragePort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Objects;
@@ -11,13 +14,21 @@ import java.util.Optional;
 
 public class IngestTransactionService implements IngestTransactionUseCase {
 
+    private static final Logger log = LoggerFactory.getLogger(IngestTransactionService.class);
+
     private final TransactionRepositoryPort transactionRepository;
     private final MessageQueuePort messageQueue;
+    private final TransactionReceiptGenerator receiptGenerator;
+    private final TransactionReceiptStoragePort receiptStorage;
 
     public IngestTransactionService(TransactionRepositoryPort transactionRepository,
-                                     MessageQueuePort messageQueue) {
+                                     MessageQueuePort messageQueue,
+                                     TransactionReceiptGenerator receiptGenerator,
+                                     TransactionReceiptStoragePort receiptStorage) {
         this.transactionRepository = transactionRepository;
         this.messageQueue = messageQueue;
+        this.receiptGenerator = receiptGenerator;
+        this.receiptStorage = receiptStorage;
     }
 
     @Override
@@ -32,7 +43,18 @@ public class IngestTransactionService implements IngestTransactionUseCase {
         Transaction withServerTimestamp = transaction.withIngestionTimestamp(Instant.now());
         Transaction persisted = transactionRepository.save(withServerTimestamp);
         messageQueue.publish(persisted);
+        generateAndStoreReceipt(persisted);
         return persisted;
+    }
+
+    private void generateAndStoreReceipt(Transaction transaction) {
+        try {
+            byte[] pdf = receiptGenerator.generate(transaction);
+            receiptStorage.store(transaction.transactionId(), pdf);
+        } catch (Exception e) {
+            log.error("No se pudo generar/almacenar el comprobante PDF de la transaccion {}: {}",
+                    transaction.transactionId(), e.getMessage(), e);
+        }
     }
 
     private void validate(Transaction transaction) {
