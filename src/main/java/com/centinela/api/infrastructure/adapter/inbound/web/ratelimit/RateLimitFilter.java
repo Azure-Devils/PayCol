@@ -132,9 +132,40 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
         String forwardedFor = request.getHeader("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.isBlank()) {
-            return "ip:" + forwardedFor.split(",")[0].trim();
+            return "ip:" + stripPort(forwardedFor.split(",")[0].trim());
         }
-        return "ip:" + request.getRemoteAddr();
+        return "ip:" + stripPort(request.getRemoteAddr());
+    }
+
+    /**
+     * Azure App Service (y otros reverse proxies) publican {@code X-Forwarded-For}
+     * como {@code <ip-cliente>:<puerto-efímero>}, no solo la IP. El puerto efímero
+     * cambia en cada conexión TCP nueva del mismo cliente, así que sin esta
+     * normalización cada petición concurrente resolvía a un "origen" distinto y el
+     * bucket de rate limiting nunca se compartía entre peticiones del mismo cliente
+     * (evidencia: banco de pruebas en {@code infra/postman/}, ver
+     * {@code docs/REPORTE-PRUEBAS.md}) — 18 peticiones concurrentes sin
+     * {@code X-API-Key} recibieron 201 todas, con {@code X-RateLimit-Remaining=9}
+     * en TODAS (bucket nuevo cada vez) en vez de decrementar desde un único bucket
+     * compartido.
+     */
+    private static String stripPort(String hostOrIp) {
+        if (hostOrIp == null || hostOrIp.isBlank()) {
+            return hostOrIp;
+        }
+        String trimmed = hostOrIp.trim();
+        if (trimmed.startsWith("[")) {
+            int closingBracket = trimmed.indexOf(']');
+            return closingBracket > 0 ? trimmed.substring(1, closingBracket) : trimmed;
+        }
+        int firstColon = trimmed.indexOf(':');
+        int lastColon = trimmed.lastIndexOf(':');
+        // IPv6 sin corchetes (2+ ':'): se deja tal cual, no lleva puerto anexado.
+        if (firstColon != lastColon) {
+            return trimmed;
+        }
+        // Exactamente un ':' -> es "ip:puerto" (IPv4) o "host:puerto".
+        return firstColon >= 0 ? trimmed.substring(0, firstColon) : trimmed;
     }
 
     private void writeTooManyRequests(HttpServletResponse response, String origin, long waitSeconds) throws IOException {
