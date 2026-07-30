@@ -132,3 +132,66 @@ migración — ver el ADR para el contexto completo.
 Bicep listo (no desplegado) en `infra/` — ver `infra/README.md` para el comando de
 deployment y los pre-requisitos (Azure CLI, `az login`, verificar free tier único por
 suscripción).
+
+## Endpoints para probar con Postman (sin interfaz web)
+
+Mientras no exista una interfaz web propia, el producto se puede demostrar directamente
+contra la API real usando Postman (o cualquier cliente HTTP). Hay una colección lista para
+importar en `infra/postman/centinela.postman_collection.json` + el environment
+`infra/postman/centinela.postman_environment.json` (evita tipear esto a mano) — ver
+`docs/REPORTE-PRUEBAS.md` para el detalle de qué prueba cada caso. Lo de abajo es la
+referencia mínima para armar las requests manualmente en la interfaz de Postman.
+
+**Base URL (Azure real, `chilecentral`):**
+```
+https://app-centinela-api-ewhxd5fxb7g3a9fp.chilecentral-01.azurewebsites.net
+```
+
+### 1. Ingestar una transacción
+
+- **Método:** `POST`
+- **URL:** `{baseUrl}/api/v1/transactions`
+- **Headers:** `Content-Type: application/json`
+- **Body (raw JSON):**
+  ```json
+  {
+    "transactionId": "demo-001",
+    "customerId": "cust-demo-001",
+    "amountCents": 4599900,
+    "currency": "COP",
+    "transactionTimestamp": "2026-07-30T14:30:00Z",
+    "location": {
+      "latitude": 4.710989,
+      "longitude": -74.072092,
+      "description": "Bogotá, Colombia"
+    },
+    "merchantId": "merch-demo-001",
+    "merchantCategory": "5411"
+  }
+  ```
+- **Respuesta esperada:** `201 Created` con la transacción persistida (`ingestionTimestamp`
+  puesto por el servidor). Si se reenvía el mismo `transactionId`, responde `201` de nuevo
+  sin duplicar (idempotencia) — ver `docs/API.md` para el contrato completo y los códigos
+  de error (`400`/`422`).
+
+### 2. Consultar una transacción por ID
+
+- **Método:** `GET`
+- **URL:** `{baseUrl}/api/v1/transactions/{transactionId}`
+- **Headers:** ninguno.
+- **Respuesta esperada:** `200 OK` con los datos de la transacción, o `404` (sin body) si no
+  existe ese `transactionId`.
+
+### 3. Descargar el comprobante PDF de una transacción
+
+- **Método:** `GET`
+- **URL:** `{baseUrl}/api/v1/transactions/{transactionId}/receipt`
+- **Headers:** ninguno.
+- **Respuesta esperada:** `200 OK` con `Content-Type: application/pdf` (el PDF generado
+  automáticamente al ingestar), o `404` si la transacción no existe o el comprobante no se
+  generó/almacenó.
+- **Estado al 2026-07-30:** esta feature vive en la rama `feature/transaction-pdf-receipt`
+  (no mergeada/desplegada todavía) y además depende de una asignación de RBAC pendiente
+  (`Storage Blob Data Contributor`, ver `docs/decisions/005-almacenamiento-pdf-comprobantes.md`)
+  — hasta que ambas cosas se resuelvan, este endpoint responde `404` en el link real de
+  arriba aunque el `transactionId` exista.
