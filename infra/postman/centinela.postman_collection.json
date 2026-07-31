@@ -1,294 +1,868 @@
 {
   "info": {
+    "_postman_id": "c3f1a2b4-8e21-4d6a-9f3c-1a2b3c4d5e6f",
     "name": "Centinela — Banco de pruebas (API real en Azure)",
-    "description": "Colección funcional contra el App Service real de Centinela (chilecentral). Cubre ingesta, idempotencia, consulta, y los caminos de error documentados en docs/API.md (400/422/404). El caso de rate limiting (burst) NO se prueba aquí de forma confiable porque Newman ejecuta las peticiones en serie y la latencia de red hacia chilecentral suele exceder la ventana de 1 segundo — ver infra/postman/rate-limit-burst.sh para esa prueba específica en paralelo.",
+    "description": "Colección funcional contra el App Service real de Centinela (chilecentral). Consolida la colección original (idempotencia/contrato/errores) con la aportada por el equipo (foldering, X-API-Key, status/receiptUploaded, rate limit, carga) y con la foto de comprobante (ReceiptPhotoDecoder). Ver docs/testing-postman.md para la guía de uso paso a paso. El caso de rate limiting en RÁFAGA no se prueba de forma confiable en Postman/Newman (peticiones en serie) — usar infra/postman/rate-limit-burst.sh para eso.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "https://app-centinela-api-ewhxd5fxb7g3a9fp.chilecentral-01.azurewebsites.net" },
-    { "key": "idemTxId", "value": "" }
+    { "key": "baseUrl", "value": "https://app-centinela-api-ewhxd5fxb7g3a9fp.chilecentral-01.azurewebsites.net", "type": "string" },
+    { "key": "apiKey", "value": "", "type": "string" },
+    { "key": "testCustomerId", "value": "cust-postman-load", "type": "string" },
+    { "key": "testMerchantId", "value": "merch-postman-load", "type": "string" }
   ],
   "item": [
     {
-      "name": "01 - POST ingesta valida (201)",
-      "event": [
+      "name": "01 - Flujo Feliz",
+      "item": [
         {
-          "listen": "prerequest",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.collectionVariables.set('idemTxId', 'postman-idem-' + Date.now());"
-            ]
-          }
+          "name": "POST - Crear transacción válida",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('generatedTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('generatedTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('transactionId devuelto == enviado', () => pm.expect(body.transactionId).to.eql(pm.collectionVariables.get('generatedTransactionId')));",
+                  "pm.test('customerId correcto', () => pm.expect(body.customerId).to.eql(pm.collectionVariables.get('testCustomerId')));",
+                  "pm.test('amountCents == 15000', () => pm.expect(body.amountCents).to.eql(15000));",
+                  "pm.test('currency == USD', () => pm.expect(body.currency).to.eql('USD'));",
+                  "pm.test('ingestionTimestamp presente (lo pone el servidor)', () => pm.expect(body.ingestionTimestamp).to.exist);",
+                  "pm.test('status es APPROVED o UNDER_REVIEW', () => pm.expect(['APPROVED', 'UNDER_REVIEW']).to.include(body.status));",
+                  "pm.test('receiptUploaded es boolean', () => pm.expect(body.receiptUploaded).to.be.a('boolean'));",
+                  "pm.collectionVariables.set('createdTransactionId', body.transactionId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{generatedTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{generatedTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         },
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 201', () => pm.response.to.have.status(201));",
-              "const body = pm.response.json();",
-              "pm.test('transactionId devuelto == enviado', () => pm.expect(body.transactionId).to.eql(pm.collectionVariables.get('idemTxId')));",
-              "pm.test('ingestionTimestamp presente (lo pone el servidor)', () => pm.expect(body.ingestionTimestamp).to.exist);",
-              "pm.test('amountCents == 15000', () => pm.expect(body.amountCents).to.eql(15000));"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"transactionId\": \"{{idemTxId}}\",\n  \"customerId\": \"cust-postman-01\",\n  \"amountCents\": 15000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": {\n    \"latitude\": 4.710989,\n    \"longitude\": -74.072092,\n    \"description\": \"Bogota test Postman\"\n  },\n  \"merchantId\": \"merch-postman-01\",\n  \"merchantCategory\": \"5411\"\n}"
+          "name": "GET - Obtener transacción creada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('transactionId matches createdTransactionId', () => pm.expect(body.transactionId).to.eql(pm.collectionVariables.get('createdTransactionId')));",
+                  "pm.test('customerId matches testCustomerId', () => pm.expect(body.customerId).to.eql(pm.collectionVariables.get('testCustomerId')));",
+                  "pm.test('amountCents == 15000 (confirma lectura real desde Cosmos)', () => pm.expect(body.amountCents).to.eql(15000));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{apiKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions/{{createdTransactionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "transactions", "{{createdTransactionId}}"]
+            }
+          },
+          "response": []
         },
-        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
-      }
+        {
+          "name": "GET - Obtener recibo (receipt)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status code is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type es application/pdf', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf'));",
+                  "pm.test('el PDF no viene vacio', () => pm.expect(pm.response.responseSize).to.be.above(0));",
+                  "pm.test('empieza con la cabecera magica %PDF (es un PDF real, no un error disfrazado)', () => pm.expect(pm.response.text().substring(0, 4)).to.eql('%PDF'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{apiKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions/{{createdTransactionId}}/receipt",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "transactions", "{{createdTransactionId}}", "receipt"]
+            }
+          },
+          "response": []
+        }
+      ]
     },
     {
-      "name": "02 - POST mismo transactionId, datos distintos (idempotencia -> 201, no sobreescribe)",
-      "event": [
+      "name": "02 - Idempotencia",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 201 (no error por duplicado)', () => pm.response.to.have.status(201));",
-              "const body = pm.response.json();",
-              "pm.test('amountCents sigue siendo 15000 (el 999999 enviado se IGNORA)', () => pm.expect(body.amountCents).to.eql(15000));"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"transactionId\": \"{{idemTxId}}\",\n  \"customerId\": \"cust-postman-01\",\n  \"amountCents\": 999999,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": {\n    \"latitude\": 4.710989,\n    \"longitude\": -74.072092,\n    \"description\": \"Intento de sobreescritura\"\n  },\n  \"merchantId\": \"merch-postman-01\",\n  \"merchantCategory\": \"5411\"\n}"
+          "name": "POST - Primera transacción (idempotencia)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-idem-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('idemTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('idemTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('First idempotent POST returns 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('amountCents is 15000 on first request', () => pm.expect(body.amountCents).to.eql(15000));",
+                  "pm.test('transactionId matches idemTransactionId', () => pm.expect(body.transactionId).to.eql(pm.collectionVariables.get('idemTransactionId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{idemTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{idemTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         },
-        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
-      }
+        {
+          "name": "POST - Segunda transacción con mismo transactionId",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Second idempotent POST returns 201 (no error por duplicado)', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('amountCents sigue siendo 15000 (el 999999 enviado se IGNORA)', () => pm.expect(body.amountCents).to.eql(15000));",
+                  "pm.test('currency sigue siendo USD (el COP enviado se IGNORA)', () => pm.expect(body.currency).to.eql('USD'));",
+                  "pm.test('transactionId is unchanged', () => pm.expect(body.transactionId).to.eql(pm.collectionVariables.get('idemTransactionId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{idemTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 999999,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{idemTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Intento de sobreescritura\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
+        }
+      ]
     },
     {
-      "name": "03 - GET transaccion existente (200)",
-      "event": [
+      "name": "03 - Validaciones de contrato",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 200', () => pm.response.to.have.status(200));",
-              "const body = pm.response.json();",
-              "pm.test('amountCents == 15000 (confirma lectura real desde Cosmos)', () => pm.expect(body.amountCents).to.eql(15000));"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/transactions/{{idemTxId}}",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "v1", "transactions", "{{idemTxId}}"]
-        }
-      }
-    },
-    {
-      "name": "04 - GET transaccion inexistente (404 sin body)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 404', () => pm.response.to.have.status(404));",
-              "pm.test('body vacio (inconsistencia conocida, ver docs/API.md)', () => pm.expect(pm.response.text().length).to.eql(0));"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/transactions/postman-no-existe-000",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "v1", "transactions", "postman-no-existe-000"]
-        }
-      }
-    },
-    {
-      "name": "05 - POST campo desconocido (422, anti-polucion)",
-      "event": [
-        {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 422', () => pm.response.to.have.status(422));",
-              "const body = pm.response.json();",
-              "pm.test('mensaje menciona el campo no reconocido', () => pm.expect(body.message).to.include('discountApplied'));",
-              "pm.test('no trae fieldErrors (es UnrecognizedPropertyException, no @Valid)', () => pm.expect(body.fieldErrors).to.be.undefined);"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"transactionId\": \"postman-unknownfield-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-02\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-02\",\n  \"merchantCategory\": \"5411\",\n  \"discountApplied\": true\n}"
+          "name": "POST - JSON mal formado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Malformed JSON returns 400', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ \"transactionId\": \"txn-malformed\", \"amountCents\": , }",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         },
-        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
-      }
-    },
-    {
-      "name": "06 - POST violaciones @Valid (422 con fieldErrors)",
-      "event": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 422', () => pm.response.to.have.status(422));",
-              "const body = pm.response.json();",
-              "pm.test('fieldErrors incluye amountCents', () => pm.expect(body.fieldErrors).to.have.property('amountCents'));",
-              "pm.test('fieldErrors incluye currency', () => pm.expect(body.fieldErrors).to.have.property('currency'));"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"transactionId\": \"postman-invalid-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-03\",\n  \"amountCents\": -100,\n  \"currency\": \"CO\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-03\",\n  \"merchantCategory\": \"5411\"\n}"
+          "name": "POST - Campo extra ingestionTimestamp",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-extrafield-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('extraFieldTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('extraFieldTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Extra field ingestionTimestamp returns 422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('mensaje menciona el campo no reconocido', () => pm.expect(body.message).to.include('ingestionTimestamp'));",
+                  "pm.test('no trae fieldErrors (es UnrecognizedPropertyException, no @Valid)', () => pm.expect(body.fieldErrors).to.be.undefined);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{extraFieldTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{extraFieldTimestamp}}\",\n  \"ingestionTimestamp\": \"2024-01-01T00:00:00Z\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         },
-        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
-      }
-    },
-    {
-      "name": "07 - POST JSON malformado (400)",
-      "event": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 400', () => pm.response.to.have.status(400));"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{ \"transactionId\": \"postman-malformed\", \"amountCents\": , }"
+          "name": "POST - amountCents=0",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-zeroamount-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('zeroAmountTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('zeroAmountTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('amountCents=0 returns 422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('fieldErrors incluye amountCents', () => pm.expect(body.fieldErrors).to.have.property('amountCents'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{zeroAmountTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 0,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{zeroAmountTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         },
-        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
-      }
-    },
-    {
-      "name": "08 - POST timestamp futuro (422, @PastOrPresent)",
-      "event": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 422', () => pm.response.to.have.status(422));",
-              "const body = pm.response.json();",
-              "pm.test('fieldErrors incluye transactionTimestamp', () => pm.expect(body.fieldErrors).to.have.property('transactionTimestamp'));"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"transactionId\": \"postman-future-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-04\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"2027-01-01T00:00:00Z\",\n  \"location\": { \"latitude\": 4.7, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-04\",\n  \"merchantCategory\": \"5411\"\n}"
+          "name": "POST - currency inválida (US)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-badcurrency-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('badCurrencyTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('badCurrencyTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Invalid currency US returns 422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('fieldErrors incluye currency', () => pm.expect(body.fieldErrors).to.have.property('currency'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{badCurrencyTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"US\",\n  \"transactionTimestamp\": \"{{badCurrencyTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         },
-        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
-      }
-    },
-    {
-      "name": "09 - POST coordenadas fuera de rango (422)",
-      "event": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 422', () => pm.response.to.have.status(422));",
-              "const body = pm.response.json();",
-              "pm.test('fieldErrors incluye location.latitude', () => pm.expect(body.fieldErrors).to.have.property('location.latitude'));"
-            ]
-          }
-        }
-      ],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"transactionId\": \"postman-badgeo-{{$timestamp}}\",\n  \"customerId\": \"cust-postman-05\",\n  \"amountCents\": 5000,\n  \"currency\": \"COP\",\n  \"transactionTimestamp\": \"{{$isoTimestamp}}\",\n  \"location\": { \"latitude\": 200, \"longitude\": -74.0 },\n  \"merchantId\": \"merch-postman-05\",\n  \"merchantCategory\": \"5411\"\n}"
+          "name": "POST - transactionTimestamp futuro",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-future-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const futureDate = new Date();",
+                  "futureDate.setFullYear(futureDate.getFullYear() + 1);",
+                  "pm.collectionVariables.set('futureTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('futureTimestamp', futureDate.toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Future transactionTimestamp returns 422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('fieldErrors incluye transactionTimestamp', () => pm.expect(body.fieldErrors).to.have.property('transactionTimestamp'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{futureTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{futureTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         },
-        "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
-      }
+        {
+          "name": "POST - latitude=200",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-badlat-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('badLatTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('badLatTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('latitude=200 returns 422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('fieldErrors incluye location.latitude', () => pm.expect(body.fieldErrors).to.have.property('location.latitude'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{badLatTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{badLatTimestamp}}\",\n  \"location\": {\n    \"latitude\": 200,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - transactionId vacío",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('emptyIdTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('Empty transactionId returns 422', () => pm.response.to.have.status(422));"]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{emptyIdTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Transacción inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Nonexistent transaction returns 404', () => pm.response.to.have.status(404));",
+                  "pm.test('body vacio (inconsistencia conocida, ver docs/API.md)', () => pm.expect(pm.response.text().length).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{apiKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions/txn-inexistente-000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "transactions", "txn-inexistente-000000"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET - Receipt inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Receipt for nonexistent transaction returns 404', () => pm.response.to.have.status(404));",
+                  "pm.test('body vacio (mismo estilo que el 404 de GET /transactions/{id})', () => pm.expect(pm.response.text().length).to.eql(0));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "X-API-Key", "value": "{{apiKey}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/transactions/txn-inexistente-000000/receipt",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "transactions", "txn-inexistente-000000", "receipt"]
+            }
+          },
+          "response": []
+        }
+      ]
     },
     {
-      "name": "10 - GET comprobante PDF de transaccion existente (200 application/pdf)",
-      "event": [
+      "name": "04 - Foto de comprobante (ReceiptPhotoDecoder)",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 200', () => pm.response.to.have.status(200));",
-              "pm.test('Content-Type es application/pdf', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/pdf'));",
-              "pm.test('el PDF no viene vacio', () => pm.expect(pm.response.responseSize).to.be.above(0));",
-              "pm.test('empieza con la cabecera magica %PDF (es un PDF real, no un error disfrazado)', () => pm.expect(pm.response.text().substring(0, 4)).to.eql('%PDF'));"
-            ]
-          }
+          "name": "POST - Foto válida (PNG 1x1 base64)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-photo-ok-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('photoOkTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('photoOkTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Foto válida retorna 201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('receiptUploaded es true (la foto sí se guardó)', () => pm.expect(body.receiptUploaded).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{photoOkTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{photoOkTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\",\n  \"photoName\": \"comprobante.png\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Foto con Data URL sin prefijo data:image",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-photo-badurl-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('photoBadUrlTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('photoBadUrlTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Data URL sin prefijo retorna 422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('mensaje menciona formato de Data URL inválido', () => pm.expect(body.message).to.include('Data URL'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{photoBadUrlTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{photoBadUrlTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": \"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=\",\n  \"photoName\": \"comprobante.png\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Foto Base64 inválido",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-photo-badb64-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('photoBadB64TransactionId', uniqueId);",
+                  "pm.collectionVariables.set('photoBadB64Timestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Base64 inválido retorna 422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('mensaje menciona contenido Base64 inválido', () => pm.expect(body.message).to.include('Base64'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{photoBadB64TransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{photoBadB64Timestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": \"data:image/png;base64,!!!esto-no-es-base64!!!\",\n  \"photoName\": \"comprobante.png\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Foto con formato no soportado (bytes no son imagen)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-photo-badformat-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('photoBadFormatTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('photoBadFormatTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Formato no soportado retorna 422', () => pm.response.to.have.status(422));",
+                  "const body = pm.response.json();",
+                  "pm.test('mensaje menciona formato de imagen no soportado', () => pm.expect(body.message).to.include('no soportado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{photoBadFormatTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{photoBadFormatTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": \"data:image/png;base64,aGVsbG8gd29ybGQgdGhpcyBpcyBub3QgYW4gaW1hZ2U=\",\n  \"photoName\": \"no-es-imagen.png\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         }
-      ],
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/transactions/{{idemTxId}}/receipt",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "v1", "transactions", "{{idemTxId}}", "receipt"]
-        }
-      }
+      ]
     },
     {
-      "name": "11 - GET comprobante de transaccion inexistente (404 sin body)",
-      "event": [
+      "name": "05 - Rate Limit",
+      "item": [
         {
-          "listen": "test",
-          "script": {
-            "type": "text/javascript",
-            "exec": [
-              "pm.test('status 404', () => pm.response.to.have.status(404));",
-              "pm.test('body vacio (mismo estilo que el 404 de GET /transactions/{id})', () => pm.expect(pm.response.text().length).to.eql(0));"
-            ]
-          }
+          "name": "POST - Rate limit request 1",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-ratelimit1-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('rateLimit1TransactionId', uniqueId);",
+                  "pm.collectionVariables.set('rateLimit1Timestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Response status is successful or rate limited', () => pm.expect([201, 429]).to.include(pm.response.code));",
+                  "const remainingHeader = pm.response.headers.get('X-RateLimit-Remaining');",
+                  "const retryAfterHeader = pm.response.headers.get('Retry-After');",
+                  "console.log('Status: ' + pm.response.code);",
+                  "if (remainingHeader !== undefined && remainingHeader !== null) {",
+                  "    console.log('Remaining: ' + remainingHeader);",
+                  "    pm.test('X-RateLimit-Remaining is a valid numeric value', () => pm.expect(isNaN(Number(remainingHeader))).to.eql(false));",
+                  "} else {",
+                  "    console.log('Remaining: header not present');",
+                  "}",
+                  "if (retryAfterHeader !== undefined && retryAfterHeader !== null) {",
+                  "    console.log('Retry-After: ' + retryAfterHeader);",
+                  "} else {",
+                  "    console.log('Retry-After: header not present');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{rateLimit1TransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{rateLimit1Timestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
+        },
+        {
+          "name": "POST - Rate limit request 2",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const uniqueId = 'txn-ratelimit2-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('rateLimit2TransactionId', uniqueId);",
+                  "pm.collectionVariables.set('rateLimit2Timestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Response status is successful or rate limited', () => pm.expect([201, 429]).to.include(pm.response.code));",
+                  "const remainingHeader = pm.response.headers.get('X-RateLimit-Remaining');",
+                  "const retryAfterHeader = pm.response.headers.get('Retry-After');",
+                  "console.log('Status: ' + pm.response.code);",
+                  "if (remainingHeader !== undefined && remainingHeader !== null) {",
+                  "    console.log('Remaining: ' + remainingHeader);",
+                  "} else {",
+                  "    console.log('Remaining: header not present');",
+                  "}",
+                  "if (retryAfterHeader !== undefined && retryAfterHeader !== null) {",
+                  "    console.log('Retry-After: ' + retryAfterHeader);",
+                  "} else {",
+                  "    console.log('Retry-After: header not present');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{rateLimit2TransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{rateLimit2Timestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         }
-      ],
-      "request": {
-        "method": "GET",
-        "url": {
-          "raw": "{{baseUrl}}/api/v1/transactions/postman-no-existe-000/receipt",
-          "host": ["{{baseUrl}}"],
-          "path": ["api", "v1", "transactions", "postman-no-existe-000", "receipt"]
+      ]
+    },
+    {
+      "name": "06 - Carga (Collection Runner)",
+      "item": [
+        {
+          "name": "POST - Preparada para Collection Runner",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const iteration = pm.info.iteration;",
+                  "const uniqueId = 'txn-runner-' + Date.now() + '-' + iteration + '-' + Math.floor(Math.random() * 1000000);",
+                  "const nowIso = new Date().toISOString();",
+                  "pm.collectionVariables.set('runnerTransactionId', uniqueId);",
+                  "pm.collectionVariables.set('runnerTimestamp', nowIso);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Runner POST returns 201 or 429', () => pm.expect([201, 429]).to.include(pm.response.code));",
+                  "console.log('transactionId: ' + pm.collectionVariables.get('runnerTransactionId'));",
+                  "console.log('status: ' + pm.response.code);",
+                  "console.log('responseTime: ' + pm.response.responseTime + 'ms');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{apiKey}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionId\": \"{{runnerTransactionId}}\",\n  \"customerId\": \"{{testCustomerId}}\",\n  \"amountCents\": 15000,\n  \"currency\": \"USD\",\n  \"transactionTimestamp\": \"{{runnerTimestamp}}\",\n  \"location\": {\n    \"latitude\": 6.25184,\n    \"longitude\": -75.56359,\n    \"description\": \"Medellin\"\n  },\n  \"merchantId\": \"{{testMerchantId}}\",\n  \"merchantCategory\": \"RETAIL\",\n  \"photo\": null,\n  \"photoName\": null\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/api/v1/transactions", "host": ["{{baseUrl}}"], "path": ["api", "v1", "transactions"] }
+          },
+          "response": []
         }
-      }
+      ]
     }
   ]
 }
