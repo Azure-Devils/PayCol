@@ -1,0 +1,43 @@
+services:
+  # PostgreSQL se eliminó por completo del proyecto (ver
+  # docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md): tanto el esquema legado de
+  # transacciones (perfil "postgres-legacy", pre-Cosmos) como el almacén NUEVO de casos de
+  # fraude de la Semana 2 (que nunca llegó a desplegarse contra un servidor real) se
+  # reemplazaron por Cosmos DB. Ya no hacen falta contenedores de Postgres en este compose —
+  # el emulador de Cosmos DB de abajo cubre ambos usos (transactions/customers/cases).
+
+  # Emulador local de Azure Storage Queue. Corre 100% en esta máquina, sin costo ni cuenta
+  # real de Azure — equivalente al cosmosdb-emulator de abajo, pero para Storage Queue.
+  # LIMITACIÓN CONOCIDA: este proyecto autentica siempre vía DefaultAzureCredentialBuilder
+  # (Managed Identity), y Azurite no implementa ese flujo de autenticación de forma
+  # transparente (requiere configuración adicional de OAuth no cubierta aquí). Por eso este
+  # contenedor sirve para inspeccionar manualmente los mensajes encolados (por ejemplo con
+  # Azure Storage Explorer apuntando a la connection string de desarrollo bien conocida de
+  # Azurite) pero NO queda cableado automáticamente con AzureQueueClients tal como está hoy.
+  # Verificar con el equipo de DevOps/Infra si vale la pena resolver esto antes de la Semana 3, o probar
+  # directamente contra una cuenta de Storage real (free tier) en su lugar.
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: centinela-azurite
+    command: "azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --skipApiVersionCheck"
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+
+  # Emulador local de Azure Cosmos DB (API NoSQL). Corre 100% en esta máquina, sin tocar
+  # Azure ni generar ningún costo. Aloja los tres containers de la app: transactions,
+  # customers y cases (casos de fraude, ver docs/decisions/004-eliminacion-postgresql-casos-a-cosmos.md).
+  # Ver también docs/decisions/001-migracion-postgresql-a-cosmosdb.md para el contexto original.
+  # La key de abajo NO es un secreto: es la clave fija de desarrollo que Microsoft publica
+  # para este emulador (siempre la misma, igual para todo el mundo, solo válida en local).
+  cosmosdb-emulator:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    container_name: centinela-cosmosdb-emulator
+    environment:
+      AZURE_COSMOS_EMULATOR_PARTITION_COUNT: "3"
+      AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "false"
+    ports:
+      # 8085 en el host (el 8081 ya lo usa server.port de la propia app Spring Boot).
+      - "8085:8081"
+      - "10250-10255:10250-10255"
+
